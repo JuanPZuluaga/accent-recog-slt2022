@@ -8,15 +8,14 @@ import speechbrain as sb
 from hyperpyyaml import load_hyperpyyaml
 from common_accent_prepare import prepare_common_accent
 
-"""Recipe for training a LID system with CommonLanguage.
+"""Recipe for training an Accent Classification system with CommonVoice Accent.
 
 To run this recipe, do the following:
 > python train.py hparams/train_ecapa_tdnn.yaml
 
 Author
 ------
- * Mirco Ravanelli 2021
- * Pavlo Ruban 2021
+ * Juan Pablo Zuluaga 2023
 """
 
 logger = logging.getLogger(__name__)

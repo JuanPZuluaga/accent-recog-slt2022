@@ -1,5 +1,5 @@
 # Language Identification experiments with CommonLanguage.
-This folder contains scripts for running language identificationexperiments with the [CommonLanguage](https://zenodo.org/record/5036977/files/CommonLanguage.tar.gz?download=1) dataset. These experiments were highly inspired by Speaker Identification tasks on VoxCeleb and follow a similar path.
+This folder contains scripts for running Accent classification experiments with the [CommonVoice dataset](https://commonvoice.mozilla.org/en/datasets) dataset. 
 
 # Training [ECAPA-TDNN](https://arxiv.org/abs/2005.07143)
 Similar to the X-Vector a bigger and more powerful ECAPA-TDNN model can be used.
@@ -14,7 +14,7 @@ better performance, at the cost of longer training time and higher compute resou
 # Performance
 | Release | hyperparams file | Val. Err | Test Err | Model link | GPUs |
 |:-------------:|:---------------------------:| -----:| -----:| --------:| :-----------:|
-| 21-06-28 | train.yaml |  13. 5 | 15.1 | https://drive.google.com/drive/folders/1btxc_H27AP_f6u4X47FM0LSteUdzhfFR?usp=sharing | 1xV100 16GB |
+| 23-01-08 | train.yaml |  - | - | - |
 
 Each epoch takes approximately 14 minutes on an NVIDIA V100.
 

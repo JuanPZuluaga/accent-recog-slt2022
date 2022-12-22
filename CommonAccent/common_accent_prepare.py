@@ -271,6 +271,8 @@ def check_common_accent_folder(data_folder):
     """
 
     # Checking if at least two accents are present in the data
-    if len(set(os.listdir(data_folder)) & set(LANGUAGES)) < 2:
+    import ipdb; ipdb.set_trace()
+    
+    if len(set(os.listdir(data_folder)) & set(ACCENTS)) < 2:
         err_msg = f"{data_folder} must have at least two accents from CommonAccent in it."
         raise FileNotFoundError(err_msg)
