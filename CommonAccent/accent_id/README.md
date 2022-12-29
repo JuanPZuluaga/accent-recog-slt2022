@@ -1,12 +1,10 @@
-# Language Identification experiments with CommonLanguage.
+# Accent Identification experiments with CommonAccent (Common Voice).
 This folder contains scripts for running Accent classification experiments with the [CommonVoice dataset](https://commonvoice.mozilla.org/en/datasets) dataset. 
 
 # Training [ECAPA-TDNN](https://arxiv.org/abs/2005.07143)
 Similar to the X-Vector a bigger and more powerful ECAPA-TDNN model can be used.
 
 `python train.py hparams/train_ecapa_tdnn.yaml`
-
-The experiment is also fine-tuning of the trained speaker embeddings done for Speaker Identification task on VoxCeleb, and can be accessed on [HuggingFace](https://huggingface.co/speechbrain/spkrec-ecapa-voxceleb). Therefore, most of the architecture choices come from that task.
 
 Data augmentation and environmental corruption are done by concatenating waveforms, dropout, speed change, reverberation, noise, and noise+rev. The batch is double size of the original one. This may lead to
 better performance, at the cost of longer training time and higher compute resourses.
@@ -18,7 +16,7 @@ better performance, at the cost of longer training time and higher compute resou
 
 Each epoch takes approximately 14 minutes on an NVIDIA V100.
 
-# Inference
+# Inference (TODO)
 The pre-trained model + easy inference is available on HuggingFace:
 - https://huggingface.co/speechbrain/lang-id-commonlanguage_ecapa/
 
