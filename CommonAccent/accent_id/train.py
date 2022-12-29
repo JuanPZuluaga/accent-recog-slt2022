@@ -98,7 +98,7 @@ class LID(sb.Brain):
 
         predictions, lens = inputs
 
-        targets = batch.language_encoded.data
+        targets = batch.accent_encoded.data
 
         # Concatenate labels (due to data augmentation)
         if stage == sb.Stage.TRAIN:
@@ -183,7 +183,7 @@ class LID(sb.Brain):
 def dataio_prep(hparams):
     """ This function prepares the datasets to be used in the brain class.
     It also defines the data processing pipeline through user-defined functions.
-    We expect `prepare_common_language` to have been called before this,
+    We expect `common_accent_prepare` to have been called before this,
     so that the `train.csv`, `dev.csv`,  and `test.csv` manifest files
     are available.
 
@@ -201,8 +201,8 @@ def dataio_prep(hparams):
     """
 
     # Initialization of the label encoder. The label encoder assignes to each
-    # of the observed label a unique index (e.g, 'lang01': 0, 'lang02': 1, ..)
-    language_encoder = sb.dataio.encoder.CategoricalEncoder()
+    # of the observed label a unique index (e.g, 'accent01': 0, 'accent02': 1, ..)
+    accent_encoder = sb.dataio.encoder.CategoricalEncoder()
 
     # Define audio pipeline
     @sb.utils.data_pipeline.takes("wav")
@@ -216,12 +216,12 @@ def dataio_prep(hparams):
         return sig
 
     # Define label pipeline:
-    @sb.utils.data_pipeline.takes("language")
-    @sb.utils.data_pipeline.provides("language", "language_encoded")
-    def label_pipeline(language):
-        yield language
-        language_encoded = language_encoder.encode_label_torch(language)
-        yield language_encoded
+    @sb.utils.data_pipeline.takes("accent")
+    @sb.utils.data_pipeline.provides("accent", "accent_encoded")
+    def label_pipeline(accent):
+        yield accent
+        accent_encoded = accent_encoder.encode_label_torch(accent)
+        yield accent_encoded
 
     # Define datasets. We also connect the dataset with the data processing
     # functions defined above.
@@ -231,22 +231,22 @@ def dataio_prep(hparams):
             csv_path=os.path.join(hparams["save_folder"], dataset + ".csv"),
             replacements={"data_root": hparams["data_folder"]},
             dynamic_items=[audio_pipeline, label_pipeline],
-            output_keys=["id", "sig", "language_encoded"],
+            output_keys=["id", "sig", "accent_encoded"],
         )
 
     # Load or compute the label encoder (with multi-GPU DDP support)
     # Please, take a look into the lab_enc_file to see the label to index
     # mappinng.
-    language_encoder_file = os.path.join(
-        hparams["save_folder"], "language_encoder.txt"
+    accent_encoder_file = os.path.join(
+        hparams["save_folder"], "accent_encoder.txt"
     )
-    language_encoder.load_or_create(
-        path=language_encoder_file,
+    accent_encoder.load_or_create(
+        path=accent_encoder_file,
         from_didatasets=[datasets["train"]],
-        output_key="language",
+        output_key="accent",
     )
 
-    return datasets, language_encoder
+    return datasets, accent_encoder
 
 
 # Recipe begins!
@@ -279,8 +279,8 @@ if __name__ == "__main__":
         },
     )
 
-    # Create dataset objects "train", "dev", and "test" and language_encoder
-    datasets, language_encoder = dataio_prep(hparams)
+    # Create dataset objects "train", "dev", and "test" and accent_encoder
+    datasets, accent_encoder = dataio_prep(hparams)
 
     # Fetch and laod pretrained modules
     sb.utils.distributed.run_on_main(hparams["pretrainer"].collect_files)
