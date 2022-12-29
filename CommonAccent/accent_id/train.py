@@ -216,12 +216,12 @@ def dataio_prep(hparams):
         return sig
 
     # Define label pipeline:
-    @sb.utils.data_pipeline.takes("language")
-    @sb.utils.data_pipeline.provides("language", "language_encoded")
-    def label_pipeline(language):
-        yield language
-        language_encoded = language_encoder.encode_label_torch(language)
-        yield language_encoded
+    @sb.utils.data_pipeline.takes("accent")
+    @sb.utils.data_pipeline.provides("accent", "accent_encoded")
+    def label_pipeline(accent):
+        yield accent
+        accent_encoded = accent_encoder.encode_label_torch(accent)
+        yield accent_encoded
 
     # Define datasets. We also connect the dataset with the data processing
     # functions defined above.
