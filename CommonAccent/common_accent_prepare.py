@@ -10,6 +10,9 @@ SLT conference
 
 import os
 import csv
+import sys
+import pandas as pd
+
 import logging
 import torchaudio
 from tqdm.contrib import tzip
@@ -92,10 +95,11 @@ def prepare_common_accent(data_folder, save_folder, skip_prep=False):
     check_common_accent_folder(data_folder)
 
     # Audio files extensions
-    extension = [".wav"]
+    extension = [".mp3"]
 
     # Create the signal list of train, dev, and test sets.
     data_split = create_sets(data_folder, extension)
+    ipdb.set_trace()
 
     # Creating csv files for training, dev and test data
     create_csv(wav_list=data_split["train"], csv_file=save_csv_train)
@@ -148,28 +152,44 @@ def create_sets(data_folder, extension):
     data_split = {dataset: [] for dataset in datasets}
 
     # Get the list of accents from the dataset folder
-    accents = [
-        name
-        for name in os.listdir(data_folder)
-        if os.path.isdir(os.path.join(data_folder, name))
-        and datasets.issubset(os.listdir(os.path.join(data_folder, name)))
-    ]
-
-    msg = f"{len(accents)} accents detected!"
+    msg = f"Loading the data of train/dev/test sets!"
     logger.info(msg)
 
+    accent_wav_list = []
     # Fill the train, dev and test datasets with audio filenames
-    for accent in accents:
-        for dataset in datasets:
-            curr_folder = os.path.join(data_folder, accent, dataset)
-            wav_list = get_all_files(curr_folder, match_and=extension)
-            data_split[dataset].extend(wav_list)
+    for dataset in datasets:
+        curr_csv_file = os.path.join(data_folder, "cv-valid-" + dataset + ".csv") 
+        with open(curr_csv_file, "r") as file:
+            csvreader = csv.reader(file)
+            for row in csvreader:
+                accent = row[6] # accent information is in this field
 
-    msg = "Data successfully split!"
+                # if accent is part of the accents we defined, then, we add it:
+                if accent in ACCENTS:
+                    wav_path = row[0]
+                    # some wierd thing at IDIAP, you can remove this if you donwload the datasetß:
+                    if dataset == "train":
+                        wav_path = wav_path.split('/')
+                        wav_path = os.path.join(data_folder, wav_path[0], wav_path[1][0:9], wav_path[1])
+                    else:
+                        wav_path = os.path.join(data_folder, wav_path)
+                    
+                    # get the other fields:
+                    utt_id = row[0].replace("/", "-").replace(".mp3","")
+                    transcript = row[1]
+
+                    accent_wav_list.append([utt_id, wav_path, transcript, accent])
+    
+    # Split the data in train/dev/test balanced:
+    df = pd.DataFrame(accent_wav_list, columns=["utt_id", "path", "transcript", "accent"])
+
+    # We need to create the train/dev/test sets, with equal samples for dev and test sets
+    ipdb.set_trace()
+
+    msg = "Data successfully loaded!"
     logger.info(msg)
 
-    return data_split
-
+    return accent_wav_list
 
 def create_csv(wav_list, csv_file):
     """
@@ -271,8 +291,20 @@ def check_common_accent_folder(data_folder):
     """
 
     # Checking if at least two accents are present in the data
-    import ipdb; ipdb.set_trace()
-    
-    if len(set(os.listdir(data_folder)) & set(ACCENTS)) < 2:
-        err_msg = f"{data_folder} must have at least two accents from CommonAccent in it."
+    files = set(os.listdir(data_folder))
+
+    if "cv-valid-train.csv" not in files:
+        err_msg = f"{data_folder} must have at the cv-valid-train folder in it."
         raise FileNotFoundError(err_msg)
+
+import ipdb
+def main():
+
+    args = sys.argv[:]
+    data_folder = args[1]
+    output_folder = args[2]
+    prepare_common_accent(data_folder, output_folder)
+
+# Recipe begins!
+if __name__ == "__main__":
+    main()
