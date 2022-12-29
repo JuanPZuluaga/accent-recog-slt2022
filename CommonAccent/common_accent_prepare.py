@@ -15,8 +15,12 @@ import pandas as pd
 
 import logging
 import torchaudio
+import librosa
 from tqdm.contrib import tzip
 from speechbrain.utils.data_utils import get_all_files
+
+import warnings
+warnings.filterwarnings('ignore')
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +103,6 @@ def prepare_common_accent(data_folder, save_folder, skip_prep=False):
 
     # Create the signal list of train, dev, and test sets.
     data_split = create_sets(data_folder, extension)
-    ipdb.set_trace()
 
     # Creating csv files for training, dev and test data
     create_csv(wav_list=data_split["train"], csv_file=save_csv_train)
@@ -182,9 +185,36 @@ def create_sets(data_folder, extension):
     
     # Split the data in train/dev/test balanced:
     df = pd.DataFrame(accent_wav_list, columns=["utt_id", "path", "transcript", "accent"])
+    
+    df_train = []
+    df_dev = []
+    df_test = []
 
     # We need to create the train/dev/test sets, with equal samples for dev and test sets
-    ipdb.set_trace()
+    all_accents = df.accent.unique()
+
+    # for loop to go over each accent and get the values
+    for accent in all_accents:
+        condition = df['accent'] == accent
+        true_index = condition[condition == True].index
+
+        # subset with only the given 'accent'
+        df_with_accent = df[condition]
+        df_size = int(df_with_accent.accent.count())
+
+        # if there are less than 300 samples, we put 20% for dev and test sets, 60% for train
+        n_samples = 100 if df_size > 300 else int(df_size * 0.2)
+
+        # get and append the first 100 values for dev/test sets, for train, we use the rest
+        df_dev.append(df_with_accent.iloc[0:n_samples])
+        df_test.append(df_with_accent.iloc[n_samples:n_samples*2])
+        df_train.append(df_with_accent.iloc[n_samples*2:])
+    
+    # create the object with the pandas DataFrames to output:
+    accent_wav_list = {}
+    accent_wav_list["train"]  = pd.concat(df_train)
+    accent_wav_list["dev"] = pd.concat(df_dev)
+    accent_wav_list["test"]  = pd.concat(df_test)
 
     msg = "Data successfully loaded!"
     logger.info(msg)
@@ -214,33 +244,33 @@ def create_csv(wav_list, csv_file):
 
     # Starting index
     idx = 0
-
-    for wav_file in tzip(wav_list):
-        wav_file = wav_file[0]
-
-        path_parts = wav_file.split(os.path.sep)
-        file_name, wav_format = os.path.splitext(path_parts[-1])
+    for wav_file in wav_list.iterrows():
+        # get some data from the file (CommonVoice is MP3)
+        utt_id = wav_file[1][0]
+        wav_path = wav_file[1][1]
+        wav_format = wav_path.split(os.path.sep)[-1].split('.')[-1]
+        transcript = wav_file[1][2]
+        accent = wav_file[1][3]
 
         # Peeking at the signal (to retrieve duration in seconds)
-        if os.path.isfile(wav_file):
-            info = torchaudio.info(wav_file)
+        if os.path.isfile(wav_path):
+            y, sample_rate = librosa.load(wav_path)
+            num_frames = len(y)
         else:
-            msg = "\tError loading: %s" % (str(len(file_name)))
+            msg = "\tError loading: %s" % (str(len(wav_path)))
             logger.info(msg)
             continue
-
-        audio_duration = info.num_frames / info.sample_rate
+            
+        audio_duration = num_frames / sample_rate
         total_duration += audio_duration
-
-        # Actual name of the accent
-        accent = path_parts[-4]
 
         # Create a row with whole utterences
         csv_line = [
             idx,  # ID
-            wav_file,  # File name
+            utt_id,  # Utterance ID
+            wav_path,  # File name
             wav_format,  # File format
-            str(info.num_frames / info.sample_rate),  # Duration (sec)
+            str("%.3f" % audio_duration),  # Duration (sec)
             accent,  # Accent
         ]
 
@@ -251,7 +281,7 @@ def create_csv(wav_list, csv_file):
         idx += 1
 
     # CSV column titles
-    csv_header = ["ID", "wav", "wav_format", "duration", "accent"]
+    csv_header = ["ID", "utt_id", "wav", "wav_format", "duration", "accent"]
 
     # Add titles to the list at indexx 0
     csv_lines.insert(0, csv_header)
@@ -297,11 +327,14 @@ def check_common_accent_folder(data_folder):
         err_msg = f"{data_folder} must have at the cv-valid-train folder in it."
         raise FileNotFoundError(err_msg)
 
-import ipdb
 def main():
 
+    # read input from CLI, you need to run it from the command lind
     args = sys.argv[:]
+
+    # 1: data folder with CommonVoice data
     data_folder = args[1]
+    # 2: where to store the CSV files with the data formatted, that is train/dev/test sets
     output_folder = args[2]
     prepare_common_accent(data_folder, output_folder)
 
