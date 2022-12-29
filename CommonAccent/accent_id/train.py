@@ -98,7 +98,7 @@ class LID(sb.Brain):
 
         predictions, lens = inputs
 
-        targets = batch.language_encoded.data
+        targets = batch.accent_encoded.data
 
         # Concatenate labels (due to data augmentation)
         if stage == sb.Stage.TRAIN:
@@ -183,7 +183,7 @@ class LID(sb.Brain):
 def dataio_prep(hparams):
     """ This function prepares the datasets to be used in the brain class.
     It also defines the data processing pipeline through user-defined functions.
-    We expect `prepare_common_language` to have been called before this,
+    We expect `common_accent_prepare` to have been called before this,
     so that the `train.csv`, `dev.csv`,  and `test.csv` manifest files
     are available.
 
@@ -201,8 +201,8 @@ def dataio_prep(hparams):
     """
 
     # Initialization of the label encoder. The label encoder assignes to each
-    # of the observed label a unique index (e.g, 'lang01': 0, 'lang02': 1, ..)
-    language_encoder = sb.dataio.encoder.CategoricalEncoder()
+    # of the observed label a unique index (e.g, 'accent01': 0, 'accent02': 1, ..)
+    accent_encoder = sb.dataio.encoder.CategoricalEncoder()
 
     # Define audio pipeline
     @sb.utils.data_pipeline.takes("wav")
@@ -237,11 +237,11 @@ def dataio_prep(hparams):
     # Load or compute the label encoder (with multi-GPU DDP support)
     # Please, take a look into the lab_enc_file to see the label to index
     # mappinng.
-    language_encoder_file = os.path.join(
+    accent_encoder_file = os.path.join(
         hparams["save_folder"], "accent_encoder.txt"
     )
-    language_encoder.load_or_create(
-        path=language_encoder_file,
+    accent_encoder.load_or_create(
+        path=accent_encoder_file,
         from_didatasets=[datasets["train"]],
         output_key="accent",
     )
@@ -279,8 +279,8 @@ if __name__ == "__main__":
         },
     )
 
-    # Create dataset objects "train", "dev", and "test" and language_encoder
-    datasets, language_encoder = dataio_prep(hparams)
+    # Create dataset objects "train", "dev", and "test" and accent_encoder
+    datasets, accent_encoder = dataio_prep(hparams)
 
     # Fetch and laod pretrained modules
     sb.utils.distributed.run_on_main(hparams["pretrainer"].collect_files)
