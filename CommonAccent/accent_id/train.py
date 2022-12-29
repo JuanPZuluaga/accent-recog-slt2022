@@ -231,22 +231,22 @@ def dataio_prep(hparams):
             csv_path=os.path.join(hparams["save_folder"], dataset + ".csv"),
             replacements={"data_root": hparams["data_folder"]},
             dynamic_items=[audio_pipeline, label_pipeline],
-            output_keys=["id", "sig", "language_encoded"],
+            output_keys=["id", "sig", "accent_encoded"],
         )
 
     # Load or compute the label encoder (with multi-GPU DDP support)
     # Please, take a look into the lab_enc_file to see the label to index
     # mappinng.
     language_encoder_file = os.path.join(
-        hparams["save_folder"], "language_encoder.txt"
+        hparams["save_folder"], "accent_encoder.txt"
     )
     language_encoder.load_or_create(
         path=language_encoder_file,
         from_didatasets=[datasets["train"]],
-        output_key="language",
+        output_key="accent",
     )
 
-    return datasets, language_encoder
+    return datasets, accent_encoder
 
 
 # Recipe begins!
