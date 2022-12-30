@@ -42,8 +42,29 @@ Info:
 
 - `data/`: where to store the manifest files (CSV files).
 
+## Manifest files
 
-## List of languages:
+The manifest files (train/dev/test.CSV) should look like this:
+
+```python
+ID,utt_id,wav,wav_format,duration,accent
+0,cv-valid-dev-sample-001066,/remote/idiap.svm/resource.dataset04/CommonVoice/cv-valid-dev/sample-001066.mp3,mp3,2.520,england
+1,cv-valid-dev-sample-001068,/remote/idiap.svm/resource.dataset04/CommonVoice/cv-valid-dev/sample-001068.mp3,mp3,2.664,england
+2,cv-valid-dev-sample-001080,/remote/idiap.svm/resource.dataset04/CommonVoice/cv-valid-dev/sample-001080.mp3,mp3,6.264,england
+3,cv-valid-dev-sample-001127,/remote/idiap.svm/resource.dataset04/CommonVoice/cv-valid-dev/sample-001127.mp3,mp3,8.592,england
+4,cv-valid-dev-sample-001150,/remote/idiap.svm/resource.dataset04/CommonVoice/cv-valid-dev/sample-001150.mp3,mp3,2.544,england
+5,cv-valid-dev-sample-001203,/remote/idiap.svm/resource.dataset04/CommonVoice/cv-valid-dev/sample-001203.mp3,mp3,2.616,england
+6,cv-valid-dev-sample-001206,/remote/idiap.svm/resource.dataset04/CommonVoice/cv-valid-dev/sample-001206.mp3,mp3,5.616,england
+7,cv-valid-dev-sample-001225,/remote/idiap.svm/resource.dataset04/CommonVoice/cv-valid-dev/sample-001225.mp3,mp3,3.864,england
+8,cv-valid-dev-sample-001246,/remote/idiap.svm/resource.dataset04/CommonVoice/cv-valid-dev/sample-001246.mp3,mp3,5.640,england
+```
+
+It might happen that the samples in the train/dev/test sets are not the same for you (random seed, structure of the dataset, etc)... Anyway, that should be ok, at least for creating a proof of concept system (we can do after some kind of K-fold cross-validation).
+
+## List of Accents:
+
+List of accents of the only-English part of CommonVoice 3.0:
+
 * african
 * australia
 * bermuda
@@ -62,7 +83,7 @@ Info:
 * wales
 
 
-## Statistics of CommonAccent (TO update):
+## Statistics of CommonAccent (TODO: update):
 
 | Name                              | Train  | Dev    | Test  |
 |:---------------------------------:|:------:|:------:|:-----:|
@@ -75,5 +96,5 @@ Info:
 | **Duration per language, min**    | ~40    | ~10    | ~10   |
 
 
-## Other information (TODO)
+## Other information (TODO: update)
 In addition to the language label, the datapoints have `age`, `gender` and `utterance transcription` associated with each utterance.
