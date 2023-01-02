@@ -14,7 +14,7 @@ __set_seed: !apply:torch.manual_seed [!ref <seed>]
 # data_folder: !PLACEHOLDER # e.g. /localscratch/common_voice_kpd/
 data_folder: /remote/idiap.svm/resource.dataset04/CommonVoice
 csv_prepared_folder: data/
-output_folder: !ref results/ECAPA-TDNN/<seed>
+output_folder: !ref results/ECAPA-TDNN-AUG/<seed>
 save_folder: !ref <output_folder>/save
 rir_folder: !ref data/rir_folder
 train_log: !ref <output_folder>/train_log.txt
@@ -53,7 +53,7 @@ test_dataloader_options:
 
 
 # variable to control whether to apply augmentation or not:
-apply_augmentation: False
+apply_augmentation: True 
 
 # Added noise and reverb come from OpenRIR dataset, automatically
 # downloaded and prepared with this Environmental Corruption class.
