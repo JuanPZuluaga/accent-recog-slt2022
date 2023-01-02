@@ -240,6 +240,7 @@ def dataio_prep(hparams):
             dynamic_items=[audio_pipeline, label_pipeline],
             output_keys=["id", "sig", "accent_encoded"],
         )
+        # filtering out recordings with more than max_audio_length allowed    
         datasets[dataset] = datasets[dataset].filtered_sorted(
                 key_max_value={"duration": hparams["max_audio_length"]},
         )
