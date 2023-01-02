@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 import os
 import sys
-import torch
 import logging
+
+import librosa
+import torch
 import torchaudio
+
 import speechbrain as sb
 from hyperpyyaml import load_hyperpyyaml
 from common_accent_prepare import prepare_common_accent
@@ -21,7 +24,7 @@ Author
 logger = logging.getLogger(__name__)
 
 
-# Brain class for Language ID training
+# Brain class for Accent ID training
 class LID(sb.Brain):
     def prepare_features(self, wavs, stage):
         """Prepare the features for computation, including augmentation.
@@ -39,7 +42,8 @@ class LID(sb.Brain):
         # concatenate the original and the augment batches in a single bigger
         # batch. This is more memory-demanding, but helps to improve the
         # performance. Change it if you run OOM.
-        if stage == sb.Stage.TRAIN:
+        if stage == sb.Stage.TRAIN and hparams['apply_augmentation']:
+            # added the False for now, to avoid augmentation of any type            
             wavs_noise = self.modules.env_corrupt(wavs, lens)
             wavs = torch.cat([wavs, wavs_noise], dim=0)
             lens = torch.cat([lens, lens], dim=0)
@@ -101,7 +105,7 @@ class LID(sb.Brain):
         targets = batch.accent_encoded.data
 
         # Concatenate labels (due to data augmentation)
-        if stage == sb.Stage.TRAIN:
+        if stage == sb.Stage.TRAIN and hparams['apply_augmentation']:
             targets = torch.cat([targets, targets], dim=0)
             lens = torch.cat([lens, lens], dim=0)
 
@@ -179,6 +183,7 @@ class LID(sb.Brain):
                 test_stats=stats,
             )
 
+import ipdb
 
 def dataio_prep(hparams):
     """ This function prepares the datasets to be used in the brain class.
@@ -210,9 +215,11 @@ def dataio_prep(hparams):
     def audio_pipeline(wav):
         """Load the signal, and pass it and its length to the corruption class.
         This is done on the CPU in the `collate_fn`."""
-        sig, _ = torchaudio.load(wav)
-        sig = sig.transpose(0, 1).squeeze(1)
-
+        # sig, _ = torchaudio.load(wav)
+        # sig = sig.transpose(0, 1).squeeze(1)
+        # Problem with Torchaudio while reading MP3 files (CommonVoice)
+        sig, _ = librosa.load(wav, sr=hparams['sample_rate'])
+        sig = torch.tensor(sig)
         return sig
 
     # Define label pipeline:
@@ -228,10 +235,13 @@ def dataio_prep(hparams):
     datasets = {}
     for dataset in ["train", "dev", "test"]:
         datasets[dataset] = sb.dataio.dataset.DynamicItemDataset.from_csv(
-            csv_path=os.path.join(hparams["save_folder"], dataset + ".csv"),
+            csv_path=os.path.join(hparams["csv_prepared_folder"], dataset + ".csv"),
             replacements={"data_root": hparams["data_folder"]},
             dynamic_items=[audio_pipeline, label_pipeline],
             output_keys=["id", "sig", "accent_encoded"],
+        )
+        datasets[dataset] = datasets[dataset].filtered_sorted(
+                key_max_value={"duration": hparams["max_audio_length"]},
         )
 
     # Load or compute the label encoder (with multi-GPU DDP support)
@@ -271,7 +281,7 @@ if __name__ == "__main__":
 
     # Data preparation, to be run on only one process.
     sb.utils.distributed.run_on_main(
-        prepare_common_language,
+        prepare_common_accent,
         kwargs={
             "data_folder": hparams["data_folder"],
             "save_folder": hparams["save_folder"],
@@ -281,6 +291,8 @@ if __name__ == "__main__":
 
     # Create dataset objects "train", "dev", and "test" and accent_encoder
     datasets, accent_encoder = dataio_prep(hparams)
+    iterator = iter(datasets['dev'])
+    items = next(iterator)
 
     # Fetch and laod pretrained modules
     sb.utils.distributed.run_on_main(hparams["pretrainer"].collect_files)

@@ -1,10 +1,8 @@
 # #################################
-# Training ECAPA-TDNN embeddings for language identification (LID).
+# Training ECAPA-TDNN embeddings for Accent identification (LID) of English Data.
 #
 # Authors:
-#  * Hwidong Na
-#  * Mirco Ravanelli
-#  * Pavlo Ruban
+#  * For SLT Juan Pablo and Sara
 # #################################
 
 # Seed needs to be set at top of yaml, before objects with parameters are made
@@ -13,13 +11,17 @@ __set_seed: !apply:torch.manual_seed [!ref <seed>]
 
 # Set up folders for reading from and writing to
 # Dataset will be downloaded to the `data_folder`
-data_folder: !PLACEHOLDER # e.g. /localscratch/common_voice_kpd/
+# data_folder: !PLACEHOLDER # e.g. /localscratch/common_voice_kpd/
+data_folder: /remote/idiap.svm/resource.dataset04/CommonVoice
+csv_prepared_folder: data/
 output_folder: !ref results/ECAPA-TDNN/<seed>
 save_folder: !ref <output_folder>/save
-rir_folder: !ref <data_folder>
+rir_folder: !ref data/rir_folder
 train_log: !ref <output_folder>/train_log.txt
 device: 'cuda:0'
-skip_prep: False
+skip_prep: True
+# max audio lenth allowed, higher than this is dropped
+max_audio_length: 5
 
 # The train logger writes training statistics to a file, as well as stdout.
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
@@ -35,8 +37,8 @@ n_mels: 80
 # Training Parameters
 sample_rate: 16000
 number_of_epochs: 30
-batch_size: 4
-n_languages: 45
+batch_size: 32
+n_languages: 16
 emb_dim: 192 # dimensionality of the embeddings
 
 # Dataloaders
@@ -48,6 +50,10 @@ train_dataloader_options:
 test_dataloader_options:
     batch_size: !ref <batch_size>
     shuffle: True
+
+
+# variable to control whether to apply augmentation or not:
+apply_augmentation: False
 
 # Added noise and reverb come from OpenRIR dataset, automatically
 # downloaded and prepared with this Environmental Corruption class.
@@ -90,7 +96,7 @@ embedding_model: !new:speechbrain.lobes.models.ECAPA_TDNN.ECAPA_TDNN
     attention_channels: 128
     lin_neurons: !ref <emb_dim>
 
-# Classifier baseed on cosine distance
+# Classifier based on cosine distance
 classifier: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
     input_size: !ref <emb_dim>
     out_neurons: !ref <n_languages>
