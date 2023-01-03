@@ -14,7 +14,7 @@ __set_seed: !apply:torch.manual_seed [!ref <seed>]
 # data_folder: !PLACEHOLDER # e.g. /localscratch/common_voice_kpd/
 data_folder: /remote/idiap.svm/resource.dataset04/CommonVoice
 csv_prepared_folder: data/
-output_folder: !ref results/ECAPA-TDNN-AUG/<seed>
+output_folder: !ref results/ECAPA-TDNN-nopretrain/<seed>
 save_folder: !ref <output_folder>/save
 rir_folder: !ref data/rir_folder
 train_log: !ref <output_folder>/train_log.txt
@@ -37,7 +37,7 @@ n_mels: 80
 # Training Parameters
 sample_rate: 16000
 number_of_epochs: 20
-batch_size: 16 # half of it becuase we do data augmentation and duplicate samples
+batch_size: 64
 n_languages: 16
 emb_dim: 192 # dimensionality of the embeddings
 
@@ -48,12 +48,12 @@ train_dataloader_options:
     shuffle: True
 
 test_dataloader_options:
-    batch_size: 8
+    batch_size: 32
     shuffle: True
 
 
 # variable to control whether to apply augmentation or not:
-apply_augmentation: True 
+apply_augmentation: False
 
 # Added noise and reverb come from OpenRIR dataset, automatically
 # downloaded and prepared with this Environmental Corruption class.
