@@ -129,3 +129,4 @@ dmypy.json
 .pyre/
 notebooks/pratrained_models
 notebooks/data
+notebooks/*.wav
