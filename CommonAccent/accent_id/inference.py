@@ -6,15 +6,16 @@ import logging
 import librosa
 import torch
 import torchaudio
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, f1_score, classification_report
 
 import speechbrain as sb
 from hyperpyyaml import load_hyperpyyaml
 from common_accent_prepare import prepare_common_accent
 
-"""Recipe for training an Accent Classification system with CommonVoice Accent.
+"""Recipe for performing inference on Accent Classification system with CommonVoice Accent.
 
 To run this recipe, do the following:
-> python train.py hparams/train_ecapa_tdnn.yaml
+> python inference.py hparams/inference_ecapa_tdnn.yaml
 
 Author
 ------
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 # Brain class for Accent ID training
-class LID(sb.Brain):
+class AccID_inf(sb.Brain):
     def prepare_features(self, wavs, stage):
         """Prepare the features for computation, including augmentation.
 
@@ -37,17 +38,6 @@ class LID(sb.Brain):
             The current stage of training.
         """
         wavs, lens = wavs
-
-        # Add augmentation if specified. In this version of augmentation, we
-        # concatenate the original and the augment batches in a single bigger
-        # batch. This is more memory-demanding, but helps to improve the
-        # performance. Change it if you run OOM.
-        if stage == sb.Stage.TRAIN and hparams['apply_augmentation']:
-            # added the False for now, to avoid augmentation of any type            
-            wavs_noise = self.modules.env_corrupt(wavs, lens)
-            wavs = torch.cat([wavs, wavs_noise], dim=0)
-            lens = torch.cat([lens, lens], dim=0)
-            wavs = self.hparams.augmentation(wavs, lens)
 
         # Feature extraction and normalization
         feats = self.modules.compute_features(wavs)
@@ -101,21 +91,13 @@ class LID(sb.Brain):
         """
 
         predictions, lens = inputs
-
         targets = batch.accent_encoded.data
-
-        # Concatenate labels (due to data augmentation)
-        if stage == sb.Stage.TRAIN and hparams['apply_augmentation']:
-            targets = torch.cat([targets, targets], dim=0)
-            lens = torch.cat([lens, lens], dim=0)
-
-            if hasattr(self.hparams.lr_annealing, "on_batch_end"):
-                self.hparams.lr_annealing.on_batch_end(self.optimizer)
-
         loss = self.hparams.compute_cost(predictions, targets)
-
+        
+        # Append the outputs here, we can access then later
         if stage != sb.Stage.TRAIN:
             self.error_metrics.append(batch.id, predictions, targets, lens)
+            self.error_metrics2.append(batch.id, predictions.argmax(dim=-1), targets)
 
         return loss
 
@@ -134,54 +116,8 @@ class LID(sb.Brain):
         # Set up evaluation-only statistics trackers
         if stage != sb.Stage.TRAIN:
             self.error_metrics = self.hparams.error_stats()
+            self.error_metrics2 = self.hparams.error_stats2()
 
-    def on_stage_end(self, stage, stage_loss, epoch=None):
-        """Gets called at the end of an epoch.
-
-        Arguments
-        ---------
-        stage : sb.Stage
-            One of sb.Stage.TRAIN, sb.Stage.VALID, sb.Stage.TEST
-        stage_loss : float
-            The average loss for all of the data processed in this stage.
-        epoch : int
-            The currently-starting epoch. This is passed
-            `None` during the test stage.
-        """
-
-        # Store the train loss until the validation stage.
-        if stage == sb.Stage.TRAIN:
-            self.train_loss = stage_loss
-
-        # Summarize the statistics from the stage for record-keeping.
-        else:
-            stats = {
-                "loss": stage_loss,
-                "error": self.error_metrics.summarize("average"),
-            }
-
-        # At the end of validation...
-        if stage == sb.Stage.VALID:
-
-            old_lr, new_lr = self.hparams.lr_annealing(epoch)
-            sb.nnet.schedulers.update_learning_rate(self.optimizer, new_lr)
-
-            # The train_logger writes a summary to stdout and to the logfile.
-            self.hparams.train_logger.log_stats(
-                {"Epoch": epoch, "lr": old_lr},
-                train_stats={"loss": self.train_loss},
-                valid_stats=stats,
-            )
-
-            # Save the current checkpoint and delete previous checkpoints,
-            self.checkpointer.save_and_keep_only(meta=stats, min_keys=["error"])
-
-        # We also write statistics about test data to stdout and to the logfile.
-        if stage == sb.Stage.TEST:
-            self.hparams.train_logger.log_stats(
-                {"Epoch loaded": self.hparams.epoch_counter.current},
-                test_stats=stats,
-            )
 
 import ipdb
 
@@ -204,10 +140,6 @@ def dataio_prep(hparams):
         Contains two keys, "train" and "dev" that correspond
         to the appropriate DynamicItemDataset object.
     """
-
-    # Initialization of the label encoder. The label encoder assignes to each
-    # of the observed label a unique index (e.g, 'accent01': 0, 'accent02': 1, ..)
-    accent_encoder = sb.dataio.encoder.CategoricalEncoder()
 
     # Define audio pipeline
     @sb.utils.data_pipeline.takes("wav")
@@ -233,7 +165,7 @@ def dataio_prep(hparams):
     # Define datasets. We also connect the dataset with the data processing
     # functions defined above.
     datasets = {}
-    for dataset in ["train", "dev", "test"]:
+    for dataset in ["dummy", "dev", "test"]:
         datasets[dataset] = sb.dataio.dataset.DynamicItemDataset.from_csv(
             csv_path=os.path.join(hparams["csv_prepared_folder"], dataset + ".csv"),
             replacements={"data_root": hparams["data_folder"]},
@@ -245,19 +177,7 @@ def dataio_prep(hparams):
                 key_max_value={"duration": hparams["max_audio_length"]},
         )
 
-    # Load or compute the label encoder (with multi-GPU DDP support)
-    # Please, take a look into the lab_enc_file to see the label to index
-    # mappinng.
-    accent_encoder_file = os.path.join(
-        hparams["save_folder"], "accent_encoder.txt"
-    )
-    accent_encoder.load_or_create(
-        path=accent_encoder_file,
-        from_didatasets=[datasets["train"]],
-        output_key="accent",
-    )
-
-    return datasets, accent_encoder
+    return datasets
 
 
 # Recipe begins!
@@ -266,61 +186,84 @@ if __name__ == "__main__":
     # Reading command line arguments.
     hparams_file, run_opts, overrides = sb.parse_arguments(sys.argv[1:])
 
-    # Initialize ddp (useful only for multi-GPU DDP training).
-    sb.utils.distributed.ddp_init_group(run_opts)
-
     # Load hyperparameters file with command-line overrides.
     with open(hparams_file) as fin:
         hparams = load_hyperpyyaml(fin, overrides)
 
-    # Create experiment directory
+    # Create output directory
     sb.create_experiment_directory(
         experiment_directory=hparams["output_folder"],
         hyperparams_to_save=hparams_file,
         overrides=overrides,
     )
 
-    # Data preparation, to be run on only one process.
-    sb.utils.distributed.run_on_main(
-        prepare_common_accent,
-        kwargs={
-            "data_folder": hparams["data_folder"],
-            "save_folder": hparams["save_folder"],
-            "skip_prep": hparams["skip_prep"],
-        },
+    # Initialization of the label encoder. The label encoder assignes to each
+    # of the observed label a unique index (e.g, 'accent01': 0, 'accent02': 1, ..)
+    accent_encoder = sb.dataio.encoder.CategoricalEncoder()
+    
+    # Load label encoder (with multi-GPU DDP support)
+    # Please, take a look into the lab_enc_file to see the label to index
+    # mappinng.    
+    accent_encoder_file = os.path.join(
+        hparams["pretrained_path"], "accent_encoder.txt"
+    )
+    accent_encoder.load_or_create(
+        path=accent_encoder_file,
+        output_key="accent",
     )
 
     # Create dataset objects "train", "dev", and "test" and accent_encoder
-    datasets, accent_encoder = dataio_prep(hparams)
+    datasets = dataio_prep(hparams)
 
     # Fetch and laod pretrained modules
     sb.utils.distributed.run_on_main(hparams["pretrainer"].collect_files)
     hparams["pretrainer"].load_collected(device=run_opts["device"])
 
-    # Initialize the Brain object to prepare for mask training.
-    lid_brain = LID(
+    # Initialize the Brain object to prepare for performing infernence.
+    accid_brain = AccID_inf(
         modules=hparams["modules"],
-        opt_class=hparams["opt_class"],
         hparams=hparams,
-        run_opts=run_opts,
-        checkpointer=hparams["checkpointer"],
     )
 
-    # The `fit()` method iterates the training loop, calling the methods
-    # necessary to update the parameters of the model. Since all objects
-    # with changing state are managed by the Checkpointer, training can be
-    # stopped at any point, and will be resumed on next call.
-    lid_brain.fit(
-        epoch_counter=lid_brain.hparams.epoch_counter,
-        train_set=datasets["train"],
-        valid_set=datasets["dev"],
-        train_loader_kwargs=hparams["train_dataloader_options"],
-        valid_loader_kwargs=hparams["test_dataloader_options"],
-    )
+    # Function that actually prints the output. you can modify this to get some other information
+    def print_confusion_matrix(AccID_object, set_name='dev'):
+        """ pass the object what contains the stats """
 
-    # Load the best checkpoint for evaluation
-    test_stats = lid_brain.evaluate(
+        # get the scores after running the forward pass
+        y_true_val = torch.cat(AccID_object.error_metrics2.labels).tolist()
+        y_pred_val = torch.cat(AccID_object.error_metrics2.scores).tolist()
+
+        # get the values of the items from the dictionary
+        y_true = [accent_encoder.ind2lab[i] for i in y_true_val]
+        y_pred = [accent_encoder.ind2lab[i] for i in y_pred_val]
+
+        # retrieve a list of classes
+        classes = [i[1] for i in accent_encoder.ind2lab.items()]
+
+        with open(f"{hparams['output_folder']}/classification_report_{set_name}.txt", "w") as f:
+            f.write(classification_report(y_true, y_pred))
+
+        # create the confusion matrix and plot it
+        cm = confusion_matrix(y_true, y_pred, labels=classes)
+        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
+        disp.plot()
+        disp.ax_.tick_params(axis='x', labelrotation = 80)
+        disp.figure_.savefig(f"{hparams['output_folder']}/conf_mat_{set_name}.png", dpi=300)
+
+    # Load the best checkpoint for evaluation of test set
+    test_stats = accid_brain.evaluate(
         test_set=datasets["test"],
         min_key="error",
         test_loader_kwargs=hparams["test_dataloader_options"],
     )
+    print_confusion_matrix(accid_brain, set_name="test")
+
+    # Load the best checkpoint for evaluation of dev set
+    test_stats = accid_brain.evaluate(
+        test_set=datasets["dev"],
+        min_key="error",
+        test_loader_kwargs=hparams["test_dataloader_options"],
+    )
+    print_confusion_matrix(accid_brain, set_name="dev")
+
+    ipdb.set_trace()

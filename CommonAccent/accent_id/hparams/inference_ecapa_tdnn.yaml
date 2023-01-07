@@ -1,0 +1,101 @@
+# #################################
+# Training ECAPA-TDNN embeddings for Accent identification (LID) of English Data.
+#
+# Authors:
+#  * For SLT Juan Pablo and Sara
+# #################################
+
+# Seed needs to be set at top of yaml, before objects with parameters are made
+seed: 1986
+__set_seed: !apply:torch.manual_seed [!ref <seed>]
+
+# Set up folders for reading from and writing:
+data_folder: /remote/idiap.svm/resource.dataset04/CommonVoice
+csv_prepared_folder: data/
+output_folder: results/analysis
+pretrained_path: /remote/idiap.svm/temp.speech01/jzuluaga/experiments/slt/accent-recog-slt2022/CommonAccent/accent_id/results/ECAPA-TDNN-nopretrain/1986/save/
+load_folder: !ref <pretrained_path>/CKPT+2023-01-06+10-01-26+00
+device: 'cuda:0'
+skip_prep: True
+# max audio lenth allowed, higher than this is dropped
+max_audio_length: 10
+
+# Feature parameters btw: 40 - 80
+n_mels: 80
+
+# Training Parameters
+sample_rate: 16000
+batch_size: 64
+n_languages: 16
+emb_dim: 192 # dimensionality of the embeddings
+
+test_dataloader_options:
+    batch_size: 32
+    shuffle: True
+
+# variable to control whether to apply augmentation or not:
+apply_augmentation: False
+
+# Feature extraction
+compute_features: !new:speechbrain.lobes.features.Fbank
+    n_mels: !ref <n_mels>
+
+# Mean and std normalization of the input features
+mean_var_norm_input: !new:speechbrain.processing.features.InputNormalization
+    norm_type: sentence
+    std_norm: False
+
+# To design a custom model, either just edit the simple CustomModel
+# class that's listed here, or replace this `!new` call with a line
+# pointing to a different file you've defined.
+
+# Embedding Model
+embedding_model: !new:speechbrain.lobes.models.ECAPA_TDNN.ECAPA_TDNN
+    input_size: !ref <n_mels>
+    activation: !name:torch.nn.LeakyReLU
+    channels: [1024, 1024, 1024, 1024, 3072]
+    kernel_sizes: [5, 3, 3, 3, 1]
+    dilations: [1, 2, 3, 4, 1]
+    attention_channels: 128
+    lin_neurons: !ref <emb_dim>
+
+# Classifier based on cosine distance
+classifier: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
+    input_size: !ref <emb_dim>
+    out_neurons: !ref <n_languages>
+
+# Loss function to calculate during inference (this is optional)
+# Additive Angular Margin
+compute_cost: !new:speechbrain.nnet.losses.LogSoftmaxWrapper
+    loss_fn: !new:speechbrain.nnet.losses.AdditiveAngularMargin
+        margin: 0.2
+        scale: 30
+
+# Keep the error stats here:
+error_stats: !name:speechbrain.utils.metric_stats.MetricStats
+    metric: !name:speechbrain.nnet.losses.classification_error
+        reduction: batch
+
+# Keep the error stats here:
+error_stats2: !name:speechbrain.utils.metric_stats.BinaryMetricStats
+
+# Objects in "modules" dict will have their parameters moved to the correct
+# device, as well as having train()/eval() called on them by the Brain class.
+modules:
+    compute_features: !ref <compute_features>
+    mean_var_norm_input: !ref <mean_var_norm_input>    
+    embedding_model: !ref <embedding_model>
+    classifier: !ref <classifier>
+
+label_encoder: !new:speechbrain.dataio.encoder.CategoricalEncoder
+
+# Load fine-tuned model and classifier
+pretrainer: !new:speechbrain.utils.parameter_transfer.Pretrainer
+    loadables:
+        embedding_model: !ref <embedding_model>
+        classifier: !ref <classifier>
+        label_encoder: !ref <label_encoder>
+    paths:
+        embedding_model: !ref <load_folder>/embedding_model.ckpt
+        classifier: !ref <load_folder>/classifier.ckpt
+        label_encoder: !ref <pretrained_path>/accent_encoder.txt
