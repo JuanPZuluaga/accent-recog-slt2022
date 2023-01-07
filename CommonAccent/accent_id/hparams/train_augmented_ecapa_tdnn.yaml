@@ -36,8 +36,8 @@ n_mels: 80
 
 # Training Parameters
 sample_rate: 16000
-number_of_epochs: 20
-batch_size: 16 # half of it becuase we do data augmentation and duplicate samples
+number_of_epochs: 30
+batch_size: 16 # half of the one compared to NoAUG becuase we do data augmentation here, i.e., duplicate samples
 n_languages: 16
 emb_dim: 192 # dimensionality of the embeddings
 
