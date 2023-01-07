@@ -41,7 +41,7 @@ class AccID_inf(sb.Brain):
 
         # Feature extraction and normalization
         feats = self.modules.compute_features(wavs)
-        feats = self.modules.mean_var_norm_input(feats, lens)
+        feats = self.modules.mean_var_norm(feats, lens)
 
         return feats, lens
 
@@ -174,7 +174,7 @@ def dataio_prep(hparams):
         )
         # filtering out recordings with more than max_audio_length allowed    
         datasets[dataset] = datasets[dataset].filtered_sorted(
-                key_max_value={"duration": hparams["max_audio_length"]},
+                key_max_value={"duration": hparaxms["max_audio_length"]},
         )
 
     return datasets

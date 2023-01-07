@@ -41,7 +41,7 @@ compute_features: !new:speechbrain.lobes.features.Fbank
     n_mels: !ref <n_mels>
 
 # Mean and std normalization of the input features
-mean_var_norm_input: !new:speechbrain.processing.features.InputNormalization
+mean_var_norm: !new:speechbrain.processing.features.InputNormalization
     norm_type: sentence
     std_norm: False
 
@@ -83,7 +83,7 @@ error_stats2: !name:speechbrain.utils.metric_stats.BinaryMetricStats
 # device, as well as having train()/eval() called on them by the Brain class.
 modules:
     compute_features: !ref <compute_features>
-    mean_var_norm_input: !ref <mean_var_norm_input>    
+    mean_var_norm: !ref <mean_var_norm>    
     embedding_model: !ref <embedding_model>
     classifier: !ref <classifier>
 
