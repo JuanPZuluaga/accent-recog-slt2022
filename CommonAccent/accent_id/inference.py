@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
+import logging
 import os
 import sys
-import logging
 
 import librosa
+import speechbrain as sb
 import torch
 import torchaudio
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, f1_score, classification_report
-
-import speechbrain as sb
-from hyperpyyaml import load_hyperpyyaml
 from common_accent_prepare import prepare_common_accent
+from hyperpyyaml import load_hyperpyyaml
+from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+)
 
 """Recipe for performing inference on Accent Classification system with CommonVoice Accent.
 
@@ -93,7 +97,7 @@ class AccID_inf(sb.Brain):
         predictions, lens = inputs
         targets = batch.accent_encoded.data
         loss = self.hparams.compute_cost(predictions, targets)
-        
+
         # Append the outputs here, we can access then later
         if stage != sb.Stage.TRAIN:
             self.error_metrics.append(batch.id, predictions, targets, lens)
@@ -121,8 +125,9 @@ class AccID_inf(sb.Brain):
 
 import ipdb
 
+
 def dataio_prep(hparams):
-    """ This function prepares the datasets to be used in the brain class.
+    """This function prepares the datasets to be used in the brain class.
     It also defines the data processing pipeline through user-defined functions.
     We expect `common_accent_prepare` to have been called before this,
     so that the `train.csv`, `dev.csv`,  and `test.csv` manifest files
@@ -150,7 +155,7 @@ def dataio_prep(hparams):
         # sig, _ = torchaudio.load(wav)
         # sig = sig.transpose(0, 1).squeeze(1)
         # Problem with Torchaudio while reading MP3 files (CommonVoice)
-        sig, _ = librosa.load(wav, sr=hparams['sample_rate'])
+        sig, _ = librosa.load(wav, sr=hparams["sample_rate"])
         sig = torch.tensor(sig)
         return sig
 
@@ -172,9 +177,9 @@ def dataio_prep(hparams):
             dynamic_items=[audio_pipeline, label_pipeline],
             output_keys=["id", "sig", "accent_encoded"],
         )
-        # filtering out recordings with more than max_audio_length allowed    
+        # filtering out recordings with more than max_audio_length allowed
         datasets[dataset] = datasets[dataset].filtered_sorted(
-                key_max_value={"duration": hparaxms["max_audio_length"]},
+            key_max_value={"duration": hparaxms["max_audio_length"]},
         )
 
     return datasets
@@ -200,13 +205,11 @@ if __name__ == "__main__":
     # Initialization of the label encoder. The label encoder assignes to each
     # of the observed label a unique index (e.g, 'accent01': 0, 'accent02': 1, ..)
     accent_encoder = sb.dataio.encoder.CategoricalEncoder()
-    
+
     # Load label encoder (with multi-GPU DDP support)
     # Please, take a look into the lab_enc_file to see the label to index
-    # mappinng.    
-    accent_encoder_file = os.path.join(
-        hparams["pretrained_path"], "accent_encoder.txt"
-    )
+    # mappinng.
+    accent_encoder_file = os.path.join(hparams["pretrained_path"], "accent_encoder.txt")
     accent_encoder.load_or_create(
         path=accent_encoder_file,
         output_key="accent",
@@ -226,8 +229,8 @@ if __name__ == "__main__":
     )
 
     # Function that actually prints the output. you can modify this to get some other information
-    def print_confusion_matrix(AccID_object, set_name='dev'):
-        """ pass the object what contains the stats """
+    def print_confusion_matrix(AccID_object, set_name="dev"):
+        """pass the object what contains the stats"""
 
         # get the scores after running the forward pass
         y_true_val = torch.cat(AccID_object.error_metrics2.labels).tolist()
@@ -240,15 +243,19 @@ if __name__ == "__main__":
         # retrieve a list of classes
         classes = [i[1] for i in accent_encoder.ind2lab.items()]
 
-        with open(f"{hparams['output_folder']}/classification_report_{set_name}.txt", "w") as f:
+        with open(
+            f"{hparams['output_folder']}/classification_report_{set_name}.txt", "w"
+        ) as f:
             f.write(classification_report(y_true, y_pred))
 
         # create the confusion matrix and plot it
         cm = confusion_matrix(y_true, y_pred, labels=classes)
         disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
         disp.plot()
-        disp.ax_.tick_params(axis='x', labelrotation = 80)
-        disp.figure_.savefig(f"{hparams['output_folder']}/conf_mat_{set_name}.png", dpi=300)
+        disp.ax_.tick_params(axis="x", labelrotation=80)
+        disp.figure_.savefig(
+            f"{hparams['output_folder']}/conf_mat_{set_name}.png", dpi=300
+        )
 
     # Load the best checkpoint for evaluation of test set
     test_stats = accid_brain.evaluate(

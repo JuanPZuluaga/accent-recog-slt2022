@@ -8,19 +8,19 @@ Author
 SLT conference
 """
 
-import os
 import csv
-import sys
-import pandas as pd
-
 import logging
-import torchaudio
-import librosa
-from tqdm.contrib import tzip
-from speechbrain.utils.data_utils import get_all_files
-
+import os
+import sys
 import warnings
-warnings.filterwarnings('ignore')
+
+import librosa
+import pandas as pd
+import torchaudio
+from speechbrain.utils.data_utils import get_all_files
+from tqdm.contrib import tzip
+
+warnings.filterwarnings("ignore")
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,7 @@ ACCENTS = [
     "us",
     "wales",
 ]
+
 
 def prepare_common_accent(data_folder, save_folder, skip_prep=False):
     """
@@ -161,31 +162,35 @@ def create_sets(data_folder, extension):
     accent_wav_list = []
     # Fill the train, dev and test datasets with audio filenames
     for dataset in datasets:
-        curr_csv_file = os.path.join(data_folder, "cv-valid-" + dataset + ".csv") 
+        curr_csv_file = os.path.join(data_folder, "cv-valid-" + dataset + ".csv")
         with open(curr_csv_file, "r") as file:
             csvreader = csv.reader(file)
             for row in csvreader:
-                accent = row[6] # accent information is in this field
+                accent = row[6]  # accent information is in this field
 
                 # if accent is part of the accents we defined, then, we add it:
                 if accent in ACCENTS:
                     wav_path = row[0]
                     # some wierd thing at IDIAP, you can remove this if you donwload the datasetß:
                     if dataset == "train":
-                        wav_path = wav_path.split('/')
-                        wav_path = os.path.join(data_folder, wav_path[0], wav_path[1][0:9], wav_path[1])
+                        wav_path = wav_path.split("/")
+                        wav_path = os.path.join(
+                            data_folder, wav_path[0], wav_path[1][0:9], wav_path[1]
+                        )
                     else:
                         wav_path = os.path.join(data_folder, wav_path)
-                    
+
                     # get the other fields:
-                    utt_id = row[0].replace("/", "-").replace(".mp3","")
+                    utt_id = row[0].replace("/", "-").replace(".mp3", "")
                     transcript = row[1]
 
                     accent_wav_list.append([utt_id, wav_path, transcript, accent])
-    
+
     # Split the data in train/dev/test balanced:
-    df = pd.DataFrame(accent_wav_list, columns=["utt_id", "path", "transcript", "accent"])
-    
+    df = pd.DataFrame(
+        accent_wav_list, columns=["utt_id", "path", "transcript", "accent"]
+    )
+
     df_train = []
     df_dev = []
     df_test = []
@@ -195,7 +200,7 @@ def create_sets(data_folder, extension):
 
     # for loop to go over each accent and get the values
     for accent in all_accents:
-        condition = df['accent'] == accent
+        condition = df["accent"] == accent
         true_index = condition[condition == True].index
 
         # subset with only the given 'accent'
@@ -207,19 +212,20 @@ def create_sets(data_folder, extension):
 
         # get and append the first 100 values for dev/test sets, for train, we use the rest
         df_dev.append(df_with_accent.iloc[0:n_samples])
-        df_test.append(df_with_accent.iloc[n_samples:n_samples*2])
-        df_train.append(df_with_accent.iloc[n_samples*2:])
-    
+        df_test.append(df_with_accent.iloc[n_samples : n_samples * 2])
+        df_train.append(df_with_accent.iloc[n_samples * 2 :])
+
     # create the object with the pandas DataFrames to output:
     accent_wav_list = {}
-    accent_wav_list["train"]  = pd.concat(df_train)
+    accent_wav_list["train"] = pd.concat(df_train)
     accent_wav_list["dev"] = pd.concat(df_dev)
-    accent_wav_list["test"]  = pd.concat(df_test)
+    accent_wav_list["test"] = pd.concat(df_test)
 
     msg = "Data successfully loaded!"
     logger.info(msg)
 
     return accent_wav_list
+
 
 def create_csv(wav_list, csv_file):
     """
@@ -248,7 +254,7 @@ def create_csv(wav_list, csv_file):
         # get some data from the file (CommonVoice is MP3)
         utt_id = wav_file[1][0]
         wav_path = wav_file[1][1]
-        wav_format = wav_path.split(os.path.sep)[-1].split('.')[-1]
+        wav_format = wav_path.split(os.path.sep)[-1].split(".")[-1]
         transcript = wav_file[1][2]
         accent = wav_file[1][3]
 
@@ -260,7 +266,7 @@ def create_csv(wav_list, csv_file):
             msg = "\tError loading: %s" % (str(len(wav_path)))
             logger.info(msg)
             continue
-            
+
         audio_duration = num_frames / sample_rate
         total_duration += audio_duration
 
@@ -327,9 +333,10 @@ def check_common_accent_folder(data_folder):
         err_msg = f"{data_folder} must have at the cv-valid-train folder in it."
         raise FileNotFoundError(err_msg)
 
+
 def main():
 
-    # read input from CLI, you need to run it from the command lind
+    # read input from CLI, you need to run it from the command lind
     args = sys.argv[:]
 
     # 1: data folder with CommonVoice data
@@ -337,6 +344,7 @@ def main():
     # 2: where to store the CSV files with the data formatted, that is train/dev/test sets
     output_folder = args[2]
     prepare_common_accent(data_folder, output_folder)
+
 
 # Recipe begins!
 if __name__ == "__main__":
