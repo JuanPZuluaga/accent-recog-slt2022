@@ -1,6 +1,6 @@
 # CommonAccent Dataset (CommonVoice 3.0)
 
-This dataset is composed of speakers of 12 different Acents that were carefully selected from [CommonVoice](https://commonvoice.mozilla.org/) database. The total duration of audio recordings is XXX hours. The data `common_accent_prepare.py` script already splits the data into train, dev (validation) and test sets.
+This dataset is composed of speakers of 16 different Acents that were carefully selected from [CommonVoice](https://commonvoice.mozilla.org/) database. The total duration of audio recordings is ~53 hours. The data `common_accent_prepare.py` script already splits the data into train, dev (validation) and test sets.
 
 ## How to run this script? 
 
@@ -16,7 +16,7 @@ conda activate slt_2023
 python -m pip install -r requirements.txt
 ```
 
-Then, you need to create the manifest files, which basically are CSV files with the train/dev/test sets. You can find an example in `CommonAccent/accent_id/data/train.csv`.
+Then, you need to create the manifest files, i.e., CSV files with the train/dev/test sets. You can find an example in `CommonAccent/accent_id/data/train.csv`.
 
 To run the file simply do:
 
@@ -87,14 +87,10 @@ List of accents of the only-English part of CommonVoice 3.0:
 
 | Name                              | Train  | Dev    | Test  |
 |:---------------------------------:|:------:|:------:|:-----:|
-| **# of utterances**               | 177552 | 47104  | 47704 |
-| **# unique speakers**             | 11189  | 1297   | 1322  |
-| **Total duration, hr**            | 30.04  | 7.53   | 7.53  |
-| **Min duration, sec**             | 0.86   | 0.98   | 0.89  |
-| **Mean duration, sec**            | 4.87   | 4.61   | 4.55  |
-| **Max duration, sec**             | 21.72  | 105.67 | 29.83 |
-| **Duration per language, min**    | ~40    | ~10    | ~10   |
+| **# of utterances**               | 45605 | 1062  | 972 |
+| **Total duration, hr**            | ~50  | 1.24   | 1.15  |
 
 
-## Other information (TODO: update)
-In addition to the language label, the datapoints have `age`, `gender` and `utterance transcription` associated with each utterance.
+## Further statistics
+
+Further data can be obtained from the the CommonVoice dataset. Future work should target other languages and also newer versions of the CommonVoice dataset.
