@@ -19,28 +19,29 @@
 
 # Introduction
 
-This is a repository of our submission to [SLT-CODE hackathon](https://slt2022.org/hackathon.php). this hackathon was part of the main SLT-2023 conference: https://slt2022.org/
+This is a repository of our submission to [SLT-CODE hackathon](https://slt2022.org/hackathon.php). This hackathon was part of the main SLT-2023 conference: https://slt2022.org/
 
 
 This repository provides all the necessary tools to perform accent identification from speech recordings with [SpeechBrain](https://github.com/speechbrain/speechbrain) toolkit! The system uses a model fine-tuned on the CommonAccent dataset in English (16 accents). The provided system can recognize the following 16 accents of English from short speech recordings:
 
 ```python
-african
-australia
-bermuda
-canada
-england
-hongkong
-indian
-ireland
-malaysia
-newzealand
-philippines
-scotland
-singapore
-southatlandtic
-us
-wales
+<accent-id> <duration-in-hrs>
+african 54.0
+australia 196.7
+bermuda 7.0
+canada 194.3
+england 728.6
+hongkong 3.4
+indian 214.5
+ireland 41.3
+malaysia 7.1
+newzealand 45.5
+philippines 7.1
+scotland 63.0
+singapore 5.0
+southatlandtic 2.6
+us 1529.9
+wales 7.5
 ```
 
 **Abstract**: The recognition of accented speech still remains a dominant problem in Automatic Speech Recognition (ASR) systems. We approach the classification of accented English speech through the Emphasized Channel Attention, Propagation and Aggregation Time Delay Neural Network (ECAPA-TDNN) architecture which has been shown to perform well on a variety of speech tasks. Three models are proposed: one trained from scratch, another two models (one using data augmentation and a baseline model) fine-tuned from the checkpoints of speechbrain/spkrec-ecapa-voxceleb (VoxCeleb). Our results show that the model fine-tuned with data augmentation yield the best results. Most of the misclassifications were structured and expected due to accent similarities, such as the American and Canadian accents. We also explored the internal categorization of embeddings through t-SNE, a dimensionality reduction technique, and found that there was a level of clustering based on phonological similarity. For future work, we would like to explore the implementation of this accent classification system in our suggested framework to improve ASR performance by making it more inclusive to accented speech. 
