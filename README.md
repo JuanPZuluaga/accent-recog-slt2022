@@ -26,6 +26,8 @@ This repository provides all the necessary tools to perform accent identificatio
 
 ```python
 <accent-id> <duration-in-hrs>
+-----------------------------
+
 african 54.0
 australia 196.7
 bermuda 7.0

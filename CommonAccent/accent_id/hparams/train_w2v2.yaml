@@ -1,0 +1,160 @@
+# #################################
+# Training ECAPA-TDNN embeddings for Accent identification (LID) of English Data.
+#
+# Authors:
+#  * For SLT Juan Pablo and Sara
+# #################################
+
+# Seed needs to be set at top of yaml, before objects with parameters are made
+seed: 1986
+__set_seed: !apply:torch.manual_seed [!ref <seed>]
+
+# Set up folders for reading from and writing to
+# Dataset will be downloaded to the `data_folder`
+# data_folder: !PLACEHOLDER # e.g. /localscratch/common_voice_kpd/
+data_folder: /remote/idiap.svm/resource.dataset04/CommonVoice
+csv_prepared_folder: data/
+output_folder: !ref results/ECAPA-TDNN/<seed>
+save_folder: !ref <output_folder>/save
+rir_folder: !ref data/rir_folder
+train_log: !ref <output_folder>/train_log.txt
+device: 'cuda:0'
+skip_prep: True
+# max audio lenth allowed, higher than this is dropped
+max_audio_length: 10
+
+# URL for the biggest Fairseq english wav2vec2 model.
+wav2vec2_hub: facebook/wav2vec2-large-960h-lv60-self
+
+# The train logger writes training statistics to a file, as well as stdout.
+train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
+    save_file: !ref <train_log>
+
+error_stats: !name:speechbrain.utils.metric_stats.MetricStats
+    metric: !name:speechbrain.nnet.losses.classification_error
+        reduction: batch
+
+# Feature parameters btw: 40 - 80
+n_mels: 80
+
+# Training Parameters
+sample_rate: 16000
+number_of_epochs: 5
+batch_size: 32
+n_languages: 16
+emb_dim: 192 # dimensionality of the embeddings
+
+# Dataloaders
+train_dataloader_options:
+    batch_size: !ref <batch_size>
+    drop_last: True
+    shuffle: True
+
+test_dataloader_options:
+    batch_size: 32
+    shuffle: True
+
+
+# variable to control whether to apply augmentation or not:
+apply_augmentation: False
+
+# Added noise and reverb come from OpenRIR dataset, automatically
+# downloaded and prepared with this Environmental Corruption class.
+env_corrupt: !new:speechbrain.lobes.augment.EnvCorrupt
+    openrir_folder: !ref <rir_folder>
+    openrir_max_noise_len: 3.0  # seconds
+    babble_prob: 0.0
+    reverb_prob: 1.0
+    noise_prob: 1.0
+    noise_snr_low: 0
+    noise_snr_high: 15
+    rir_scale_factor: 1.0
+# Adds speech change + time and frequency dropouts (time-domain implementation)
+# A small speed change help to improve the performance of speaker-id as well.
+augmentation: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
+    sample_rate: !ref <sample_rate>
+    speeds: [95, 100, 105]
+
+# Model parameters
+activation: !name:torch.nn.GELU
+dnn_layers: 2
+dnn_neurons: 1024
+freeze_wav2vec: True
+
+# front end - main model
+wav2vec2: !new:speechbrain.lobes.models.huggingface_wav2vec.HuggingFaceWav2Vec2
+   source: !ref <wav2vec2_hub>
+   output_norm: True
+   freeze: !ref <freeze_wav2vec>
+   save_path: !ref <save_folder>/wav2vec2_checkpoint
+
+# pre-output network
+enc: !new:speechbrain.lobes.models.VanillaNN.VanillaNN
+   input_shape: [null, null, 1024]
+   activation: !ref <activation>
+   dnn_blocks: !ref <dnn_layers>
+   dnn_neurons: !ref <dnn_neurons>
+
+# Classifier layer 
+# TODO: how to merge the features? Mean in the sequence?  
+classifier_lin: !new:speechbrain.nnet.linear.Linear
+   input_size: !ref <dnn_neurons>
+   n_neurons: !ref <n_languages>
+
+# Classifier based on cosine distance
+classifier: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
+    input_size: !ref <emb_dim>
+    out_neurons: !ref <n_languages>
+
+
+# The first object passed to the Brain class is this "Epoch Counter"
+# which is saved by the Checkpointer so that training can be resumed
+# if it gets interrupted at any point.
+epoch_counter: !new:speechbrain.utils.epoch_loop.EpochCounter
+    limit: !ref <number_of_epochs>
+
+# Objects in "modules" dict will have their parameters moved to the correct
+# device, as well as having train()/eval() called on them by the Brain class.
+modules:
+    env_corrupt: !ref <env_corrupt>
+    augmentation: !ref <augmentation>
+    encoder: !ref <enc>
+    wav2vec2: !ref <wav2vec2>
+    classifier: !ref <classifier>
+    classifier_lin: !ref <classifier_lin>
+
+model: !new:torch.nn.ModuleList
+   - [!ref <enc>, !ref <classifier_lin>]
+
+# Additive Angular Margin
+compute_cost: !new:speechbrain.nnet.losses.LogSoftmaxWrapper
+    loss_fn: !new:speechbrain.nnet.losses.AdditiveAngularMargin
+        margin: 0.2
+        scale: 30
+
+# Learning rates
+lr: 0.0001
+lr_final: 0.00001
+
+# This optimizer will be constructed by the Brain class after all parameters
+# are moved to the correct device. Then it will be added to the checkpointer.
+opt_class: !name:torch.optim.Adam
+    lr: !ref <lr>
+    weight_decay: 0.000002
+
+# Linear lr decay
+lr_annealing: !new:speechbrain.nnet.schedulers.LinearScheduler
+    initial_value: !ref <lr>
+    final_value: !ref <lr_final>
+    epoch_count: !ref <number_of_epochs>
+
+# This object is used for saving the state of training both so that it
+# can be resumed if it gets interrupted, and also so that the best checkpoint
+# can be later loaded for evaluation or inference.
+checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
+    checkpoints_dir: !ref <save_folder>
+    recoverables:
+        wav2vec2: !ref <wav2vec2>
+        model: !ref <model>
+        scheduler_model: !ref <lr_annealing>
+        counter: !ref <epoch_counter>
