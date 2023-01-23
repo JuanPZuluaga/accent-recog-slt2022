@@ -14,7 +14,7 @@ __set_seed: !apply:torch.manual_seed [!ref <seed>]
 # data_folder: !PLACEHOLDER # e.g. /localscratch/common_voice_kpd/
 data_folder: /remote/idiap.svm/resource.dataset04/CommonVoice
 csv_prepared_folder: data/
-output_folder: !ref results/W2V2/baseline/<seed>
+output_folder: !ref results/W2V2/baseline_lv60k/<seed>
 save_folder: !ref <output_folder>/save
 rir_folder: !ref data/rir_folder
 train_log: !ref <output_folder>/train_log.txt
@@ -24,8 +24,8 @@ skip_prep: True
 max_audio_length: 10
 
 # URL for the biggest Fairseq english wav2vec2 model.
-# wav2vec2_hub: facebook/wav2vec2-large-960h-lv60-self #dimension of this model is 1024
-wav2vec2_hub: "facebook/wav2vec2-base" #dimension of this model is 768
+wav2vec2_hub: facebook/wav2vec2-large-960h-lv60-self #dimension of this model is 1024
+# wav2vec2_hub: "facebook/wav2vec2-base" #dimension of this model is 768
 
 # The train logger writes training statistics to a file, as well as stdout.
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
@@ -42,7 +42,7 @@ apply_augmentation: False
 # Training Parameters
 sample_rate: 16000
 number_of_epochs: 5
-batch_size: 32
+batch_size: 16
 
 # set to TRUE to freeze all wav2vec2
 freeze_wav2vec2: False
@@ -51,7 +51,7 @@ freeze_wav2vec2: False
 freeze_wav2vec2_conv: True
 
 # Model parameters
-encoder_dim: 768
+encoder_dim: 1024
 
 # Number of accents
 n_accents: 16

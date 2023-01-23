@@ -35,25 +35,25 @@ class LID(sb.Brain):
         stage : sb.Stage
             The current stage of training.
         """
-        wavs, lens = wavs
+        wavs, wav_lens = wavs
+        wavs, wav_lens = wavs.to(self.device), wav_lens.to(self.device)
 
-        ipdb.set_trace()
         # Add augmentation if specified. In this version of augmentation, we
         # concatenate the original and the augment batches in a single bigger
         # batch. This is more memory-demanding, but helps to improve the
         # performance. Change it if you run OOM.
         if stage == sb.Stage.TRAIN and hparams["apply_augmentation"]:
             # added the False for now, to avoid augmentation of any type
-            wavs_noise = self.modules.env_corrupt(wavs, lens)
+            wavs_noise = self.modules.env_corrupt(wavs, wav_lens)
             wavs = torch.cat([wavs, wavs_noise], dim=0)
-            lens = torch.cat([lens, lens], dim=0)
-            wavs = self.hparams.augmentation(wavs, lens)
+            wav_lens = torch.cat([wav_lens, wav_lens], dim=0)
+            wavs = self.hparams.augmentation(wavs, wav_lens)
 
-        # Feature extraction and normalization
-        feats = self.modules.compute_features(wavs)
-        feats = self.modules.mean_var_norm_input(feats, lens)
+        # forward pass HF (possible: pre-trained) model
+        # feats = self.modules.wav2vec2(wavs, wav_lens=wav_lens)
+        feats = self.modules.wav2vec2(wavs)
 
-        return feats, lens
+        return feats, wav_lens
 
     def compute_forward(self, batch, stage):
         """Runs all the computation of that transforms the input into the
@@ -77,8 +77,13 @@ class LID(sb.Brain):
 
         # Compute features, embeddings and output
         feats, lens = self.prepare_features(batch.sig, stage)
-        embeddings = self.modules.embedding_model(feats)
-        outputs = self.modules.classifier(embeddings)
+
+        # last dim will be used for AdaptativeAVG pool
+        outputs = self.hparams.avg_pool(feats, lens)
+        outputs = outputs.view(outputs.shape[0], -1)
+
+        outputs = self.modules.output_mlp(outputs)
+        outputs = self.hparams.log_softmax(outputs)
 
         return outputs, lens
 
@@ -102,22 +107,46 @@ class LID(sb.Brain):
 
         predictions, lens = inputs
 
+        # get the targets from the batch
         targets = batch.accent_encoded.data
+
+        # to meet the input form of nll loss
+        targets = targets.squeeze(1)
 
         # Concatenate labels (due to data augmentation)
         if stage == sb.Stage.TRAIN and hparams["apply_augmentation"]:
             targets = torch.cat([targets, targets], dim=0)
             lens = torch.cat([lens, lens], dim=0)
 
+            # to check this
             if hasattr(self.hparams.lr_annealing, "on_batch_end"):
                 self.hparams.lr_annealing.on_batch_end(self.optimizer)
+        # ipdb.set_trace()
 
+        # get the final loss
         loss = self.hparams.compute_cost(predictions, targets)
 
+        # append the metrics for evaluation
         if stage != sb.Stage.TRAIN:
-            self.error_metrics.append(batch.id, predictions, targets, lens)
+            # self.error_metrics.append(batch.id, predictions, targets, lens)
+            self.error_metrics.append(batch.id, predictions, targets)
 
         return loss
+
+    def fit_batch(self, batch):
+        """Trains the parameters given a single batch in input"""
+
+        predictions = self.compute_forward(batch, sb.Stage.TRAIN)
+        loss = self.compute_objectives(predictions, batch, sb.Stage.TRAIN)
+        loss.backward()
+        if self.check_gradients(loss):
+            self.wav2vec2_optimizer.step()
+            self.optimizer.step()
+
+        self.wav2vec2_optimizer.zero_grad()
+        self.optimizer.zero_grad()
+
+        return loss.detach()
 
     def on_stage_start(self, stage, epoch=None):
         """Gets called at the beginning of each epoch.
@@ -130,6 +159,11 @@ class LID(sb.Brain):
             The currently-starting epoch. This is passed
             `None` during the test stage.
         """
+
+        # Set up statistics trackers for this stage
+        self.loss_metric = sb.utils.metric_stats.MetricStats(
+            metric=sb.nnet.losses.nll_loss
+        )
 
         # Set up evaluation-only statistics trackers
         if stage != sb.Stage.TRAIN:
@@ -157,32 +191,59 @@ class LID(sb.Brain):
         else:
             stats = {
                 "loss": stage_loss,
-                "error": self.error_metrics.summarize("average"),
+                "error_rate": self.error_metrics.summarize("average"),
             }
+
 
         # At the end of validation...
         if stage == sb.Stage.VALID:
 
-            old_lr, new_lr = self.hparams.lr_annealing(epoch)
+            old_lr, new_lr = self.hparams.lr_annealing(stats["error_rate"])
             sb.nnet.schedulers.update_learning_rate(self.optimizer, new_lr)
+
+            (
+                old_lr_wav2vec2,
+                new_lr_wav2vec2,
+            ) = self.hparams.lr_annealing_wav2vec2(stats["error_rate"])
+            sb.nnet.schedulers.update_learning_rate(
+                self.wav2vec2_optimizer, new_lr_wav2vec2
+            )
 
             # The train_logger writes a summary to stdout and to the logfile.
             self.hparams.train_logger.log_stats(
-                {"Epoch": epoch, "lr": old_lr},
+                {"Epoch": epoch, "lr": old_lr, "wave2vec_lr": old_lr_wav2vec2},
                 train_stats={"loss": self.train_loss},
                 valid_stats=stats,
             )
 
             # Save the current checkpoint and delete previous checkpoints,
-            self.checkpointer.save_and_keep_only(meta=stats, min_keys=["error"])
+            self.checkpointer.save_and_keep_only(
+                meta=stats, min_keys=["error_rate"]
+            )
 
-        # We also write statistics about test data to stdout and to the logfile.
+        # We also write statistics about test data to stdout and to logfile.
         if stage == sb.Stage.TEST:
             self.hparams.train_logger.log_stats(
                 {"Epoch loaded": self.hparams.epoch_counter.current},
                 test_stats=stats,
             )
 
+    def init_optimizers(self):
+        "Initializes the wav2vec2 optimizer and model optimizer"
+        self.wav2vec2_optimizer = self.hparams.wav2vec2_opt_class(
+            self.modules.wav2vec2.parameters()
+        )
+        self.optimizer = self.hparams.opt_class(self.hparams.model.parameters())
+
+        if self.checkpointer is not None:
+            self.checkpointer.add_recoverable(
+                "wav2vec2_opt", self.wav2vec2_optimizer
+            )
+            self.checkpointer.add_recoverable("optimizer", self.optimizer)
+
+    def zero_grad(self, set_to_none=False):
+        self.wav2vec2_optimizer.zero_grad(set_to_none)
+        self.optimizer.zero_grad(set_to_none)
 
 import ipdb
 
@@ -293,9 +354,10 @@ if __name__ == "__main__":
     # Create dataset objects "train", "dev", and "test" and accent_encoder
     datasets, accent_encoder = dataio_prep(hparams)
 
-    # Fetch and laod pretrained modules
-    sb.utils.distributed.run_on_main(hparams["pretrainer"].collect_files)
-    hparams["pretrainer"].load_collected(device=run_opts["device"])
+    hparams["wav2vec2"] = hparams["wav2vec2"].to("cuda:0")
+    # freeze the feature extractor part when unfreezing
+    if not hparams["freeze_wav2vec2"] and hparams["freeze_wav2vec2_conv"]:
+        hparams["wav2vec2"].model.feature_extractor._freeze_parameters()
 
     # Initialize the Brain object to prepare for mask training.
     lid_brain = LID(
@@ -305,11 +367,6 @@ if __name__ == "__main__":
         run_opts=run_opts,
         checkpointer=hparams["checkpointer"],
     )
-
-    # We load the pretrained wav2vec2 model
-    if "pretrainer" in hparams.keys():
-        sb.utils.distributed.run_on_main(hparams["pretrainer"].collect_files)
-        hparams["pretrainer"].load_collected(LID.device)
 
     # The `fit()` method iterates the training loop, calling the methods
     # necessary to update the parameters of the model. Since all objects
@@ -326,6 +383,6 @@ if __name__ == "__main__":
     # Load the best checkpoint for evaluation
     test_stats = lid_brain.evaluate(
         test_set=datasets["test"],
-        min_key="error",
+        min_key="error_rate",
         test_loader_kwargs=hparams["test_dataloader_options"],
     )
