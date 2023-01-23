@@ -41,7 +41,7 @@ apply_augmentation: False
 
 # Training Parameters
 sample_rate: 16000
-number_of_epochs: 5
+number_of_epochs: 30
 batch_size: 32
 
 # set to TRUE to freeze all wav2vec2

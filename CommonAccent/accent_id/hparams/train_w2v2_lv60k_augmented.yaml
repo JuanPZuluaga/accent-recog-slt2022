@@ -40,8 +40,8 @@ apply_augmentation: True
 
 # Training Parameters
 sample_rate: 16000
-number_of_epochs: 5
-batch_size: 8 # it should be 16, but we do half as there's data augmentation on top
+number_of_epochs: 30
+batch_size: 4 # it should be 16, but we do half as there's data augmentation on top
 
 # set to TRUE to freeze all wav2vec2
 freeze_wav2vec2: False

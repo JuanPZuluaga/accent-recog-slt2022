@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 # Brain class for Accent ID training
-class LID(sb.Brain):
+class AID(sb.Brain):
     def prepare_features(self, wavs, stage):
         """Prepare the features for computation, including augmentation.
 
@@ -360,7 +360,7 @@ if __name__ == "__main__":
         hparams["wav2vec2"].model.feature_extractor._freeze_parameters()
 
     # Initialize the Brain object to prepare for mask training.
-    lid_brain = LID(
+    aid_brain = AID(
         modules=hparams["modules"],
         opt_class=hparams["opt_class"],
         hparams=hparams,
@@ -372,8 +372,8 @@ if __name__ == "__main__":
     # necessary to update the parameters of the model. Since all objects
     # with changing state are managed by the Checkpointer, training can be
     # stopped at any point, and will be resumed on next call.
-    lid_brain.fit(
-        epoch_counter=lid_brain.hparams.epoch_counter,
+    aid_brain.fit(
+        epoch_counter=aid_brain.hparams.epoch_counter,
         train_set=datasets["train"],
         valid_set=datasets["dev"],
         train_loader_kwargs=hparams["train_dataloader_options"],
@@ -381,7 +381,7 @@ if __name__ == "__main__":
     )
 
     # Load the best checkpoint for evaluation
-    test_stats = lid_brain.evaluate(
+    test_stats = aid_brain.evaluate(
         test_set=datasets["test"],
         min_key="error_rate",
         test_loader_kwargs=hparams["test_dataloader_options"],
