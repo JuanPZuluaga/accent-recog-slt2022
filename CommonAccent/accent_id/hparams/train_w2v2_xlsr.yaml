@@ -85,7 +85,6 @@ test_dataloader_opts:
 apply_augmentation: False
 
 
-
 # Added noise and reverb come from OpenRIR dataset, automatically
 # downloaded and prepared with this Environmental Corruption class.
 env_corrupt: !new:speechbrain.lobes.augment.EnvCorrupt

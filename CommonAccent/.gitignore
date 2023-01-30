@@ -1,0 +1,8 @@
+exp/**
+data/**
+results/**
+
+accent_id/notebooks/**
+accent_id/exp/**
+accent_id/results/**
+accent_id/hparams/backup
