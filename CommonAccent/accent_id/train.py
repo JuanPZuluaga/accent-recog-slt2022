@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 # Brain class for Accent ID training
-class LID(sb.Brain):
+class AID(sb.Brain):
     def prepare_features(self, wavs, stage):
         """Prepare the features for computation, including augmentation.
 
@@ -111,13 +111,27 @@ class LID(sb.Brain):
             if hasattr(self.hparams.lr_annealing, "on_batch_end"):
                 self.hparams.lr_annealing.on_batch_end(self.optimizer)
 
+        # get the final loss
         loss = self.hparams.compute_cost(predictions, targets)
 
+        # append the metrics for evaluation
         if stage != sb.Stage.TRAIN:
             self.error_metrics.append(batch.id, predictions, targets, lens)
 
         return loss
 
+    def fit_batch(self, batch):
+        """Trains the parameters given a single batch in input"""
+
+        predictions = self.compute_forward(batch, sb.Stage.TRAIN)
+        loss = self.compute_objectives(predictions, batch, sb.Stage.TRAIN)
+        loss.backward()
+        if self.check_gradients(loss):
+            self.optimizer.step()
+
+        self.optimizer.zero_grad()
+
+        return loss.detach()
     def on_stage_start(self, stage, epoch=None):
         """Gets called at the beginning of each epoch.
 
@@ -182,15 +196,24 @@ class LID(sb.Brain):
                 test_stats=stats,
             )
 
+    def init_optimizers(self):
+        "Initializes the model optimizer"
+        self.optimizer = self.hparams.opt_class(self.hparams.model.parameters())
+
+        if self.checkpointer is not None:
+            self.checkpointer.add_recoverable("optimizer", self.optimizer)
+
+    def zero_grad(self, set_to_none=False):
+        self.optimizer.zero_grad(set_to_none)
+
 
 import ipdb
-
 
 def dataio_prep(hparams):
     """This function prepares the datasets to be used in the brain class.
     It also defines the data processing pipeline through user-defined functions.
     We expect `common_accent_prepare` to have been called before this,
-    so that the `train.csv`, `dev.csv`,  and `test.csv` manifest files
+    so that the `train.csv`, `valid.csv`,  and `test.csv` manifest files
     are available.
 
     Arguments
@@ -202,15 +225,67 @@ def dataio_prep(hparams):
     Returns
     -------
     datasets : dict
-        Contains two keys, "train" and "dev" that correspond
+        Contains two keys, "train" and "valid" that correspond
         to the appropriate DynamicItemDataset object.
     """
+    
+    # 1. Define train/valid/test datasets
+    data_folder = hparams["csv_prepared_folder"]
+    train_csv = os.path.join(data_folder, "train" + ".csv")
+    valid_csv = os.path.join(data_folder, "dev" + ".csv")
+    test_csv = os.path.join(data_folder, "test" + ".csv")
+
+    train_data = sb.dataio.dataset.DynamicItemDataset.from_csv(
+        csv_path=train_csv, replacements={"data_root": data_folder},
+    )
+
+    if hparams["sorting"] == "ascending":
+        # we sort training data to speed up training and get better results.
+        train_data = train_data.filtered_sorted(
+            sort_key="duration",
+            key_max_value={"duration": hparams["avoid_if_longer_than"]},
+        )
+        # when sorting do not shuffle in dataloader ! otherwise is pointless
+        hparams["train_dataloader_opts"]["shuffle"] = False
+
+    elif hparams["sorting"] == "descending":
+        train_data = train_data.filtered_sorted(
+            sort_key="duration",
+            reverse=True,
+            key_max_value={"duration": hparams["avoid_if_longer_than"]},
+        )
+        # when sorting do not shuffle in dataloader ! otherwise is pointless
+        hparams["train_dataloader_opts"]["shuffle"] = False
+
+    elif hparams["sorting"] == "random":
+        train_data = train_data.filtered_sorted(
+            key_max_value={"duration": hparams["avoid_if_longer_than"]},
+        )
+
+    else:
+        raise NotImplementedError(
+            "sorting must be random, ascending or descending"
+        )
+
+    valid_data = sb.dataio.dataset.DynamicItemDataset.from_csv(
+        csv_path=valid_csv, replacements={"data_root": data_folder},
+    )
+    # We also sort the validation data so it is faster to validate
+    valid_data = valid_data.filtered_sorted(sort_key="duration")
+    
+    test_data = sb.dataio.dataset.DynamicItemDataset.from_csv(
+        csv_path=test_csv, replacements={"data_root": data_folder},
+    )
+    # We also sort the test data so it is faster to validate
+    test_data = test_data.filtered_sorted(sort_key="duration")
+
+    datasets = [train_data, valid_data, test_data]
 
     # Initialization of the label encoder. The label encoder assignes to each
     # of the observed label a unique index (e.g, 'accent01': 0, 'accent02': 1, ..)
     accent_encoder = sb.dataio.encoder.CategoricalEncoder()
 
-    # Define audio pipeline
+    # 2. Define audio pipeline:
     @sb.utils.data_pipeline.takes("wav")
     @sb.utils.data_pipeline.provides("sig")
     def audio_pipeline(wav):
@@ -223,7 +298,9 @@ def dataio_prep(hparams):
         sig = torch.tensor(sig)
         return sig
 
-    # Define label pipeline:
+    sb.dataio.dataset.add_dynamic_item(datasets, audio_pipeline)
+
+    # 3. Define label pipeline:
     @sb.utils.data_pipeline.takes("accent")
     @sb.utils.data_pipeline.provides("accent", "accent_encoded")
     def label_pipeline(accent):
@@ -231,20 +308,12 @@ def dataio_prep(hparams):
         accent_encoded = accent_encoder.encode_label_torch(accent)
         yield accent_encoded
 
-    # Define datasets. We also connect the dataset with the data processing
-    # functions defined above.
-    datasets = {}
-    for dataset in ["train", "dev", "test"]:
-        datasets[dataset] = sb.dataio.dataset.DynamicItemDataset.from_csv(
-            csv_path=os.path.join(hparams["csv_prepared_folder"], dataset + ".csv"),
-            replacements={"data_root": hparams["data_folder"]},
-            dynamic_items=[audio_pipeline, label_pipeline],
-            output_keys=["id", "sig", "accent_encoded"],
-        )
-        # filtering out recordings with more than max_audio_length allowed
-        datasets[dataset] = datasets[dataset].filtered_sorted(
-            key_max_value={"duration": hparams["max_audio_length"]},
-        )
+    sb.dataio.dataset.add_dynamic_item(datasets, label_pipeline)
+
+    # 4. Set output:
+    sb.dataio.dataset.set_output_keys(
+        datasets, ["id", "sig", "accent_encoded"],
+    )
 
     # Load or compute the label encoder (with multi-GPU DDP support)
     # Please, take a look into the lab_enc_file to see the label to index
@@ -252,11 +321,45 @@ def dataio_prep(hparams):
     accent_encoder_file = os.path.join(hparams["save_folder"], "accent_encoder.txt")
     accent_encoder.load_or_create(
         path=accent_encoder_file,
-        from_didatasets=[datasets["train"]],
+        from_didatasets=[train_data],
         output_key="accent",
     )
 
-    return datasets, accent_encoder
+    # 5. If Dynamic Batching is used, we instantiate the needed samplers.
+    train_batch_sampler = None
+    valid_batch_sampler = None
+    if hparams["dynamic_batching"]:
+        from speechbrain.dataio.sampler import DynamicBatchSampler  # noqa
+
+        dynamic_hparams = hparams["dynamic_batch_sampler"]
+        num_buckets = dynamic_hparams["num_buckets"]
+
+        train_batch_sampler = DynamicBatchSampler(
+            train_data,
+            dynamic_hparams["max_batch_len"],
+            num_buckets=num_buckets,
+            length_func=lambda x: x["duration"],
+            shuffle=dynamic_hparams["shuffle_ex"],
+            batch_ordering=dynamic_hparams["batch_ordering"],
+        )
+
+        valid_batch_sampler = DynamicBatchSampler(
+            valid_data,
+            dynamic_hparams["max_batch_len_val"],
+            num_buckets=num_buckets,
+            length_func=lambda x: x["duration"],
+            shuffle=dynamic_hparams["shuffle_ex"],
+            batch_ordering=dynamic_hparams["batch_ordering"],
+        )
+
+    return (
+        train_data,
+        valid_data,
+        test_data,
+        train_batch_sampler,
+        valid_batch_sampler,
+        accent_encoder
+    )
 
 
 # Recipe begins!
@@ -289,15 +392,23 @@ if __name__ == "__main__":
         },
     )
 
-    # Create dataset objects "train", "dev", and "test" and accent_encoder
-    datasets, accent_encoder = dataio_prep(hparams)
+    # Create dataset objects "train", "valid", and "test", train/val samples and accent_encoder
+    (
+        train_data,
+        valid_data,
+        test_data,
+        train_bsampler,
+        valid_bsampler,
+        accent_encoder
+    ) = dataio_prep(hparams)
 
-    # Fetch and laod pretrained modules
-    sb.utils.distributed.run_on_main(hparams["pretrainer"].collect_files)
-    hparams["pretrainer"].load_collected(device=run_opts["device"])
+    # Fetch and laod pretrained moduls if True
+    if hparams["load_pretrained"]:
+        sb.utils.distributed.run_on_main(hparams["pretrainer"].collect_files)
+        hparams["pretrainer"].load_collected(device=run_opts["device"])
 
     # Initialize the Brain object to prepare for mask training.
-    lid_brain = LID(
+    aid_brain = AID(
         modules=hparams["modules"],
         opt_class=hparams["opt_class"],
         hparams=hparams,
@@ -305,21 +416,35 @@ if __name__ == "__main__":
         checkpointer=hparams["checkpointer"],
     )
 
+    # adding objects to trainer:
+    train_dataloader_opts = hparams["train_dataloader_opts"]
+    valid_dataloader_opts = hparams["valid_dataloader_opts"]
+
+    if train_bsampler is not None:
+        train_dataloader_opts = {
+            "batch_sampler": train_bsampler,
+            "num_workers": hparams["num_workers"],
+        }
+    if valid_bsampler is not None:
+        valid_dataloader_opts = {"batch_sampler": valid_bsampler}
+
+
+    # ipdb.set_trace()
     # The `fit()` method iterates the training loop, calling the methods
     # necessary to update the parameters of the model. Since all objects
     # with changing state are managed by the Checkpointer, training can be
     # stopped at any point, and will be resumed on next call.
-    lid_brain.fit(
-        epoch_counter=lid_brain.hparams.epoch_counter,
-        train_set=datasets["train"],
-        valid_set=datasets["dev"],
-        train_loader_kwargs=hparams["train_dataloader_options"],
-        valid_loader_kwargs=hparams["test_dataloader_options"],
+    aid_brain.fit(
+        aid_brain.hparams.epoch_counter,
+        train_data,
+        valid_data,
+        train_loader_kwargs=train_dataloader_opts,
+        valid_loader_kwargs=valid_dataloader_opts,
     )
 
     # Load the best checkpoint for evaluation
-    test_stats = lid_brain.evaluate(
-        test_set=datasets["test"],
-        min_key="error",
-        test_loader_kwargs=hparams["test_dataloader_options"],
+    test_stats = aid_brain.evaluate(
+        test_set=test_data,
+        min_key="error_rate",
+        test_loader_kwargs=hparams["test_dataloader_opts"],
     )

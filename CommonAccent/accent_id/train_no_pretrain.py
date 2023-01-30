@@ -243,7 +243,7 @@ def dataio_prep(hparams):
         )
         # filtering out recordings with more than max_audio_length allowed
         datasets[dataset] = datasets[dataset].filtered_sorted(
-            key_max_value={"duration": hparams["max_audio_length"]},
+            key_max_value={"duration": hparams["avoid_if_longer_than"]},
         )
 
     # Load or compute the label encoder (with multi-GPU DDP support)

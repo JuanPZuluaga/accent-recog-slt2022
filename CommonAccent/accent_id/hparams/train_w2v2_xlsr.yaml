@@ -1,8 +1,8 @@
 # #################################
-# Training ECAPA-TDNN embeddings for Accent identification (LID) of English Data.
+# Fine-tuning XLSR-53 model for Accent identification (LID) of English Data.
 #
 # Authors:
-#  * For SLT Juan Pablo and Sara
+#  * SLT-CODE Hackathon Juan Pablo Zuluaga Gomez
 # #################################
 
 # Seed needs to be set at top of yaml, before objects with parameters are made
@@ -14,18 +14,19 @@ __set_seed: !apply:torch.manual_seed [!ref <seed>]
 # data_folder: !PLACEHOLDER # e.g. /localscratch/common_voice_kpd/
 data_folder: /remote/idiap.svm/resource.dataset04/CommonVoice
 csv_prepared_folder: data/
-output_folder: !ref results/W2V2/augmented_lv60k/<seed>
+output_folder: !ref results/W2V2/xlsr-53/<seed>
 save_folder: !ref <output_folder>/save
 rir_folder: !ref data/rir_folder
 train_log: !ref <output_folder>/train_log.txt
 device: 'cuda:0'
 skip_prep: True
 # max audio lenth allowed, higher than this is dropped
-max_audio_length: 10
+avoid_if_longer_than: 10.0
 
 # URL for the biggest Fairseq english wav2vec2 model.
-wav2vec2_hub: facebook/wav2vec2-large-960h-lv60-self #dimension of this model is 1024
-# wav2vec2_hub: "facebook/wav2vec2-base" #dimension of this model is 768
+wav2vec2_hub: "facebook/wav2vec2-large-xlsr-53" # dimension of this model is 1024
+# Model parameters
+encoder_dim: 1024
 
 # The train logger writes training statistics to a file, as well as stdout.
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
@@ -35,13 +36,10 @@ error_stats: !name:speechbrain.utils.metric_stats.MetricStats
     metric: !name:speechbrain.nnet.losses.classification_error
         reduction: batch
 
-# variable to control whether to apply augmentation or not:
-apply_augmentation: True
-
 # Training Parameters
 sample_rate: 16000
 number_of_epochs: 30
-batch_size: 4 # it should be 16, but we do half as there's data augmentation on top
+batch_size: 32
 
 # set to TRUE to freeze all wav2vec2
 freeze_wav2vec2: False
@@ -49,22 +47,44 @@ freeze_wav2vec2: False
 # We see an improvement of 2% with freezing CNNs
 freeze_wav2vec2_conv: True
 
-# Model parameters
-encoder_dim: 1024
-
 # Number of accents
 n_accents: 16
 
-# Dataloaders
-train_dataloader_options:
-    batch_size: !ref <batch_size>
-    num_workers: 2  # 2 on linux but 0 works on windows    
-    drop_last: True
-    shuffle: True
+# batch type of sorting
+sorting: random # sort the samples
 
-test_dataloader_options:
+# This setup works well for RTX 3090 24GB GPU, adapts it to your needs.
+# Or turn it off (but training speed will decrease)
+dynamic_batching: True
+max_batch_len: 100 # XLSR is way bigger than w2v2-base, this works well
+max_batch_len_val: 100
+num_bucket: 200
+num_workers: 4
+
+dynamic_batch_sampler:
+   max_batch_len: !ref <max_batch_len>
+   max_batch_len_val: !ref <max_batch_len_val>
+   num_buckets: !ref <num_bucket>
+   shuffle_ex: True # if true re-creates batches at each epoch shuffling examples.
+   batch_ordering: random
+   max_batch_ex: 128
+
+# Dataloader options
+# Dataloader options
+train_dataloader_opts:
     batch_size: !ref <batch_size>
-    shuffle: False
+    num_workers: !ref <num_workers>
+valid_dataloader_opts:
+    batch_size: !ref <batch_size>
+    num_workers: !ref <num_workers>
+test_dataloader_opts:
+    batch_size: !ref <batch_size>
+    num_workers: !ref <num_workers>
+
+# variable to control whether to apply augmentation or not:
+apply_augmentation: False
+
+
 
 # Added noise and reverb come from OpenRIR dataset, automatically
 # downloaded and prepared with this Environmental Corruption class.
