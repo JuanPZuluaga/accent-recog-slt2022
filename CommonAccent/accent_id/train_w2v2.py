@@ -139,7 +139,6 @@ class AID(sb.Brain):
         if self.check_gradients(loss):
             self.wav2vec2_optimizer.step()
             self.optimizer.step()
-
         self.wav2vec2_optimizer.zero_grad()
         self.optimizer.zero_grad()
 

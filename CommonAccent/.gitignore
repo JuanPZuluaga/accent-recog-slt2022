@@ -1,8 +1,9 @@
 exp/**
 data/**
 results/**
+ablations/**
 
 accent_id/notebooks/**
-accent_id/exp/**
-accent_id/results/**
+exp/**
+results/**
 accent_id/hparams/backup

@@ -23,6 +23,11 @@ skip_prep: True
 # max audio lenth allowed, higher than this is dropped
 avoid_if_longer_than: 10.0
 
+# Load pretrained embedding module (from HuggingFace)
+# Note: in this case, we pre-train with the ECAPA-TDNN model trained on voxceleb
+# for speaker-id (this leads to a performance improvement).
+ecapa_tdnn_hub: speechbrain/spkrec-ecapa-voxceleb/embedding_model.ckpt
+
 # The train logger writes training statistics to a file, as well as stdout.
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
     save_file: !ref <train_log>
@@ -48,13 +53,12 @@ sorting: random # sort the samples
 # Or turn it off (but training speed will decrease)
 dynamic_batching: True
 max_batch_len: 600 #
-max_batch_len_val: 600 
 num_bucket: 200
 num_workers: 4
 
 dynamic_batch_sampler:
    max_batch_len: !ref <max_batch_len>
-   max_batch_len_val: !ref <max_batch_len_val>
+   max_batch_len_val: !ref <max_batch_len>
    num_buckets: !ref <num_bucket>
    shuffle_ex: True # if true re-creates batches at each epoch shuffling examples.
    batch_ordering: random
@@ -173,15 +177,10 @@ checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
         classifier: !ref <classifier>
         counter: !ref <epoch_counter>
 
-# Load pretrained embedding module
-# Note: in this case, we pre-train with the ECAPA-TDNN model trained on voxceleb
-# for speaker-id (this leads to a performance improvement).
-embedding_model_path: speechbrain/spkrec-ecapa-voxceleb/embedding_model.ckpt
-
 # Pretrained ECAPA embeddings from SpeakerID on VoxCeleb
 pretrainer: !new:speechbrain.utils.parameter_transfer.Pretrainer
     collect_in: !ref <save_folder>
     loadables:
         embedding_model: !ref <embedding_model>
     paths:
-        embedding_model: !ref <embedding_model_path>
+        embedding_model: !ref <ecapa_tdnn_hub>

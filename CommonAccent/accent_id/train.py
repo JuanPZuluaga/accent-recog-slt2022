@@ -128,10 +128,11 @@ class AID(sb.Brain):
         loss.backward()
         if self.check_gradients(loss):
             self.optimizer.step()
-
         self.optimizer.zero_grad()
 
         return loss.detach()
+
+
     def on_stage_start(self, stage, epoch=None):
         """Gets called at the beginning of each epoch.
 
@@ -143,6 +144,11 @@ class AID(sb.Brain):
             The currently-starting epoch. This is passed
             `None` during the test stage.
         """
+
+        # Set up statistics trackers for this stage
+        self.loss_metric = sb.utils.metric_stats.MetricStats(
+            metric=sb.nnet.losses.nll_loss
+        )
 
         # Set up evaluation-only statistics trackers
         if stage != sb.Stage.TRAIN:
