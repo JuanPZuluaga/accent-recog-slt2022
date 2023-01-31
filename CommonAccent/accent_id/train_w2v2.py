@@ -22,7 +22,6 @@ Author
 
 logger = logging.getLogger(__name__)
 
-
 # Brain class for Accent ID training
 class AID(sb.Brain):
     def prepare_features(self, wavs, stage):
@@ -36,7 +35,6 @@ class AID(sb.Brain):
             The current stage of training.
         """
         wavs, wav_lens = wavs
-        # wavs, wav_lens = wavs.to(self.device), wav_lens.to(self.device)
 
         # Add augmentation if specified. In this version of augmentation, we
         # concatenate the original and the augment batches in a single bigger
@@ -240,9 +238,6 @@ class AID(sb.Brain):
     def zero_grad(self, set_to_none=False):
         self.wav2vec2_optimizer.zero_grad(set_to_none)
         self.optimizer.zero_grad(set_to_none)
-
-import ipdb
-
 
 def dataio_prep(hparams):
     """This function prepares the datasets to be used in the brain class.
@@ -464,8 +459,6 @@ if __name__ == "__main__":
     if valid_bsampler is not None:
         valid_dataloader_opts = {"batch_sampler": valid_bsampler}
 
-
-    # ipdb.set_trace()
     # The `fit()` method iterates the training loop, calling the methods
     # necessary to update the parameters of the model. Since all objects
     # with changing state are managed by the Checkpointer, training can be

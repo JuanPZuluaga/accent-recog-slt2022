@@ -22,7 +22,6 @@ Author
 
 logger = logging.getLogger(__name__)
 
-
 # Brain class for Accent ID training
 class AID(sb.Brain):
     def prepare_features(self, wavs, stage):
@@ -182,7 +181,7 @@ class AID(sb.Brain):
         # At the end of validation...
         if stage == sb.Stage.VALID:
 
-            old_lr, new_lr = self.hparams.lr_annealing(epoch)
+            old_lr, new_lr = self.hparams.lr_annealing(stats["error_rate"])
             sb.nnet.schedulers.update_learning_rate(self.optimizer, new_lr)
 
             # The train_logger writes a summary to stdout and to the logfile.
@@ -193,7 +192,9 @@ class AID(sb.Brain):
             )
 
             # Save the current checkpoint and delete previous checkpoints,
-            self.checkpointer.save_and_keep_only(meta=stats, min_keys=["error"])
+            self.checkpointer.save_and_keep_only(
+                meta=stats, min_keys=["error_rate"]
+            )
 
         # We also write statistics about test data to stdout and to the logfile.
         if stage == sb.Stage.TEST:
@@ -212,8 +213,6 @@ class AID(sb.Brain):
     def zero_grad(self, set_to_none=False):
         self.optimizer.zero_grad(set_to_none)
 
-
-import ipdb
 
 def dataio_prep(hparams):
     """This function prepares the datasets to be used in the brain class.
@@ -434,8 +433,6 @@ if __name__ == "__main__":
     if valid_bsampler is not None:
         valid_dataloader_opts = {"batch_sampler": valid_bsampler}
 
-
-    # ipdb.set_trace()
     # The `fit()` method iterates the training loop, calling the methods
     # necessary to update the parameters of the model. Since all objects
     # with changing state are managed by the Checkpointer, training can be

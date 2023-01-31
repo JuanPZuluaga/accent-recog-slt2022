@@ -152,7 +152,6 @@ compute_cost: !new:speechbrain.nnet.losses.LogSoftmaxWrapper
 
 # Learning rates
 lr: 0.0001
-lr_final: 0.00001
 
 # This optimizer will be constructed by the Brain class after all parameters
 # are moved to the correct device. Then it will be added to the checkpointer.
@@ -161,10 +160,11 @@ opt_class: !name:torch.optim.Adam
     weight_decay: 0.000002
 
 # Linear lr decay
-lr_annealing: !new:speechbrain.nnet.schedulers.LinearScheduler
+lr_annealing: !new:speechbrain.nnet.schedulers.NewBobScheduler
     initial_value: !ref <lr>
-    final_value: !ref <lr_final>
-    epoch_count: !ref <number_of_epochs>
+    improvement_threshold: 0.0025
+    annealing_factor: 0.9
+    patient: 0
 
 # This object is used for saving the state of training both so that it
 # can be resumed if it gets interrupted, and also so that the best checkpoint
