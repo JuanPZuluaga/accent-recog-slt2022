@@ -133,8 +133,6 @@ def skip(save_csv_train, save_csv_dev, save_csv_test):
 
     return skip
 
-import ipdb
-
 def create_sets(data_folder, extension):
     """
     Creates lists for train, dev and test sets with data from the data_folder

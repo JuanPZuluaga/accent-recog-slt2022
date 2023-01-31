@@ -16,23 +16,21 @@ set -euo pipefail
 
 # static vars
 cmd='/remote/idiap.svm/temp.speech01/jzuluaga/kaldi-jul-2020/egs/wsj/s5/utils/parallel/queue.pl -l gpu -P minerva -l h='vgn[ij]*' -V'
-cmd=none
 
 # training vars
 
 # model from HF hub, it could be another one, e.g., facebook/wav2vec2-base
 wav2vec2_hub="facebook/wav2vec2-large-xlsr-53"
 seed="1986"
-apply_augmentation="True"
-max_batch_len=50
-batch_size=1
+apply_augmentation="False"
+max_batch_len=100
 
 # data folder:
 csv_prepared_folder="data"
 output_dir="results/W2V2/"
 
 # If augmentation is defined:
-if [ ! "$apply_augmentation" == 'True' ]; then
+if [ ! "$apply_augmentation" == "True" ]; then
     output_folder="$output_dir/$(basename $wav2vec2_hub)-augmented/$seed"
     rir_folder="data/rir_folder/"
 else
@@ -57,7 +55,7 @@ $cmd python3 accent_id/train_w2v2.py accent_id/hparams/train_w2v2_xlsr.yaml \
     --rir_folder="$rir_folder" \
     --csv_prepared_folder=$csv_prepared_folder \
     --apply_augmentation="$apply_augmentation" \
-    --max_batch_len="$max_batch_len" --batch_size="$batch_size" \
+    --max_batch_len="$max_batch_len" \
     --output_folder="$output_folder" \
     --wav2vec2_hub="$wav2vec2_hub" 
 

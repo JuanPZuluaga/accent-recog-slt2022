@@ -3,10 +3,10 @@ import logging
 import os
 import sys
 
-import librosa
 import speechbrain as sb
 import torch
 import torchaudio
+import librosa
 from common_accent_prepare import prepare_common_accent
 from hyperpyyaml import load_hyperpyyaml
 
@@ -175,7 +175,7 @@ class AID(sb.Brain):
         else:
             stats = {
                 "loss": stage_loss,
-                "error": self.error_metrics.summarize("average"),
+                "error_rate": self.error_metrics.summarize("average"),
             }
 
         # At the end of validation...
@@ -297,8 +297,7 @@ def dataio_prep(hparams):
         """Load the signal, and pass it and its length to the corruption class.
         This is done on the CPU in the `collate_fn`."""
         # sig, _ = torchaudio.load(wav)
-        # sig = sig.transpose(0, 1).squeeze(1)
-        # Problem with Torchaudio while reading MP3 files (CommonVoice)
+        # sig = sig.transpose(0, 1).squeeze(1)        
         sig, _ = librosa.load(wav, sr=hparams["sample_rate"])
         sig = torch.tensor(sig)
         return sig

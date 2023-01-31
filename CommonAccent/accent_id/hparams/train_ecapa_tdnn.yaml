@@ -70,10 +70,10 @@ train_dataloader_opts:
     batch_size: !ref <batch_size>
     num_workers: !ref <num_workers>
 valid_dataloader_opts:
-    batch_size: !ref <test_batch_size>
+    batch_size: !ref <batch_size>
     num_workers: !ref <num_workers>
 test_dataloader_opts:
-    batch_size: !ref <test_batch_size>
+    batch_size: !ref <batch_size>
     num_workers: !ref <num_workers>
 
 # variable to control whether to apply augmentation or not:
@@ -143,6 +143,10 @@ modules:
     embedding_model: !ref <embedding_model>
     mean_var_norm_input: !ref <mean_var_norm_input>
     classifier: !ref <classifier>
+
+model: !new:torch.nn.ModuleList
+   - [!ref <embedding_model>, !ref <classifier>]
+
 
 # Additive Angular Margin
 compute_cost: !new:speechbrain.nnet.losses.LogSoftmaxWrapper

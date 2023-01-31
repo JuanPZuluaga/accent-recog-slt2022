@@ -3,10 +3,10 @@ import logging
 import os
 import sys
 
-import librosa
 import speechbrain as sb
 import torch
 import torchaudio
+import librosa
 from common_accent_prepare import prepare_common_accent
 from hyperpyyaml import load_hyperpyyaml
 
@@ -323,7 +323,6 @@ def dataio_prep(hparams):
         This is done on the CPU in the `collate_fn`."""
         # sig, _ = torchaudio.load(wav)
         # sig = sig.transpose(0, 1).squeeze(1)
-        # Problem with Torchaudio while reading MP3 files (CommonVoice)
         sig, _ = librosa.load(wav, sr=hparams["sample_rate"])
         sig = torch.tensor(sig)
         return sig
