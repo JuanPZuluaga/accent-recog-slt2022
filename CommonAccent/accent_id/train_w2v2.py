@@ -76,8 +76,17 @@ class AID(sb.Brain):
         # Compute features, embeddings and output
         feats, lens = self.prepare_features(batch.sig, stage)
 
-        # last dim will be used for AdaptativeAVG pool
-        outputs = self.hparams.avg_pool(feats, lens)
+        # last dim will be used for pooling, 
+        # StatisticsPooling uses 'lens'
+        if hparams["avg_pool_class"] == "statpool":
+            outputs = self.hparams.avg_pool(feats, lens)
+        elif hparams["avg_pool_class"] == "avgpool":
+            outputs = self.hparams.avg_pool(feats)
+            # this uses a kernel, thus the output thus the dim is not 1
+            outputs = outputs.mean(dim=1)
+        else:
+            outputs = self.hparams.avg_pool(feats)
+
         outputs = outputs.view(outputs.shape[0], -1)
 
         outputs = self.modules.output_mlp(outputs)
@@ -390,6 +399,25 @@ def dataio_prep(hparams):
         accent_encoder
     )
 
+def get_pooling_layer(hparams):
+    """function to get the pooling layer based on value in hparams file or CLI"""
+    pooling = hparams["avg_pool_class"]
+    
+    # possible classes are statpool, adaptivepool, avgpool
+    if pooling == "statpool":
+        from speechbrain.nnet.pooling import StatisticsPooling
+        pooling_layer = StatisticsPooling(return_std=False)
+    elif pooling == "adaptivepool":
+        from speechbrain.nnet.pooling import AdaptivePool
+        pooling_layer = AdaptivePool(output_size=1)
+    elif pooling == "avgpool":
+        from speechbrain.nnet.pooling import Pooling1d
+        pooling_layer = Pooling1d(pool_type="avg", kernel_size=3)
+    else:
+        raise ValueError("Pooling strategy must be in ['statpool', 'adaptivepool', 'avgpool']")
+    hparams["avg_pool"] = pooling_layer
+
+    return hparams
 
 # Recipe begins!
 if __name__ == "__main__":
@@ -420,6 +448,9 @@ if __name__ == "__main__":
             "skip_prep": hparams["skip_prep"],
         },
     )
+        
+    # defining the Pooling strategy based on hparams file:
+    hparams = get_pooling_layer(hparams)
 
     # Create dataset objects "train", "valid", and "test", train/val samples and accent_encoder
     (
@@ -476,3 +507,4 @@ if __name__ == "__main__":
         min_key="error_rate",
         test_loader_kwargs=hparams["test_dataloader_opts"],
     )
+

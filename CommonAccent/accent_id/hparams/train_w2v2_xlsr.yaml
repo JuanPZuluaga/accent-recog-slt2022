@@ -14,7 +14,7 @@ __set_seed: !apply:torch.manual_seed [!ref <seed>]
 # data_folder: !PLACEHOLDER # e.g. /localscratch/common_voice_kpd/
 data_folder: /remote/idiap.svm/resource.dataset04/CommonVoice
 csv_prepared_folder: data/
-output_folder: !ref results/W2V2/xlsr-53/<seed>
+output_folder: !ref results/W2V2/xlsr-53-<avg_pool_class>/<seed>
 save_folder: !ref <output_folder>/save
 rir_folder: !ref data/rir_folder
 train_log: !ref <output_folder>/train_log.txt
@@ -106,7 +106,6 @@ augmentation: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
 activation: !name:torch.nn.GELU
 dnn_layers: 2
 dnn_neurons: 1024
-freeze_wav2vec: True
 
 # front end Wav2vec2 - main model
 wav2vec2: !new:speechbrain.lobes.models.huggingface_wav2vec.HuggingFaceWav2Vec2
@@ -116,8 +115,8 @@ wav2vec2: !new:speechbrain.lobes.models.huggingface_wav2vec.HuggingFaceWav2Vec2
     freeze_feature_extractor: !ref <freeze_wav2vec2_conv>
     save_path: !ref <save_folder>/wav2vec2_checkpoint
 
-avg_pool: !new:speechbrain.nnet.pooling.StatisticsPooling
-    return_std: False
+# possible classes are statpool, adaptivepool, avgpool
+avg_pool_class: statpool
 
 output_mlp: !new:speechbrain.nnet.linear.Linear
     input_size: !ref <encoder_dim>

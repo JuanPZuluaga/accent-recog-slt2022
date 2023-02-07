@@ -1,8 +1,7 @@
 exp/**
 data/**
 results/**
+common_voice_11_0/**
 
 accent_id/notebooks/**
-exp/**
-results/**
 accent_id/hparams/backup
