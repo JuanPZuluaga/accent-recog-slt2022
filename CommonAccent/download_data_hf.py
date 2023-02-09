@@ -18,7 +18,7 @@ from datasets import load_dataset, load_from_disk
 import warnings
 warnings.filterwarnings("ignore")
 
-_COMMON_VOICE_FOLDER = "/remote/idiap.svm/temp.speech01/jzuluaga/experiments/slt/accent-recog-slt2022/CommonAccent/common_voice_11_0/common_voice_11_0.py"
+_COMMON_VOICE_FOLDER = "common_voice_11_0/common_voice_11_0.py"
 
 def prepare_cv_from_hf(output_folder, language="en"):
     """ function to prepare the datasets in <output-folder> """
@@ -95,7 +95,7 @@ def main():
     )
     parser.add_argument(
         "output_folder",
-        help="name of the output folder to store the csv files for each split",
+        help="path of the output folder to store the csv files for each split",
     )
     args = parser.parse_args()
 

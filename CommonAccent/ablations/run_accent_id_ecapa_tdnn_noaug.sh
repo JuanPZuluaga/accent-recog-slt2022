@@ -28,7 +28,7 @@ csv_prepared_folder="data"
 output_dir="results/ECAPA-TDNN/spkrec-ecapa-voxceleb"
 
 # If augmentation is defined:
-if [ ! "$apply_augmentation" == "True" ]; then
+if [ "$apply_augmentation" == "True" ]; then
     output_folder="${output_dir}-augmented/$seed"
     rir_folder="data/rir_folder/"
 else

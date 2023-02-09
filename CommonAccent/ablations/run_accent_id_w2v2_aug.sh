@@ -30,7 +30,7 @@ csv_prepared_folder="data"
 output_dir="results/W2V2/"
 
 # If augmentation is defined:
-if [ ! "$apply_augmentation" == "True" ]; then
+if [ "$apply_augmentation" == "True" ]; then
     output_folder="$output_dir/$(basename $wav2vec2_hub)-augmented/$seed"
     rir_folder="data/rir_folder/"
 else

@@ -82,7 +82,7 @@ class AID(sb.Brain):
             outputs = self.hparams.avg_pool(feats, lens)
         elif hparams["avg_pool_class"] == "avgpool":
             outputs = self.hparams.avg_pool(feats)
-            # this uses a kernel, thus the output thus the dim is not 1
+            # this uses a kernel, thus the output dim is not 1 (mean to reduce)
             outputs = outputs.mean(dim=1)
         else:
             outputs = self.hparams.avg_pool(feats)

@@ -11,8 +11,10 @@ SLT conference
 import csv
 import logging
 import os
-import sys
+import argparse
+import re
 import warnings
+import unicodedata
 
 import pandas as pd
 import torchaudio
@@ -23,27 +25,47 @@ warnings.filterwarnings("ignore")
 
 logger = logging.getLogger(__name__)
 
+""" You need to first run : download_data_hf.py, to create the TSV files, and
+    Then you need to select the accents you want to use in the training.
+
+    For instance, you can do in the terminal:
+    - cat /out/folder/tsv/files/* | cut -d$'\t' -f5 | sort | uniq -c | sort -n
+
+    That command produces the count number of labeled samples with that accent. 
+    Select accents with at least 100 samples.
+"""
+
 ACCENTS = [
-    "african",
-    "australia",
-    "bermuda",
-    "canada",
-    "england",
-    "hongkong",
-    "indian",
-    "ireland",
-    "malaysia",
-    "newzealand",
-    "philippines",
-    "scotland",
-    "singapore",
-    "southatlandtic",
-    "us",
-    "wales",
+    "Austrian",
+    "East African Khoja",
+    "Dutch",
+    "West Indies and Bermuda (Bahamas, Bermuda, Jamaica, Trinidad)",
+    "Welsh English",
+    "Malaysian English",
+    "Liverpool English,Lancashire English,England English",
+    "Singaporean English",
+    "Hong Kong English",
+    "Filipino",
+    "Southern African (South Africa, Zimbabwe, Namibia)",
+    "New Zealand English",
+    "Irish English",
+    "Northern Irish",
+    "Scottish English",
+    "Australian English",
+    "German English,Non native speaker",
+    "Canadian English",
+    "England English",
+    "India and South Asia (India, Pakistan, Sri Lanka)",
+    "United States English",
 ]
 
-
-def prepare_common_accent(data_folder, save_folder, skip_prep=False):
+def prepare_common_accent(
+        data_folder, 
+        save_folder, 
+        accented_letters=False,
+        language="en",        
+        skip_prep=False,
+    ):
     """
     Prepares the csv files for the CommonAccent dataset for Accent Classification.
     Download: https://commonvoice.mozilla.org/en/datasets
@@ -57,6 +79,11 @@ def prepare_common_accent(data_folder, save_folder, skip_prep=False):
         The directory where to store the csv files.
     max_duration : int, optional
         Max duration (in seconds) of training uterances.
+    accented_letters : bool, optional
+        Defines if accented letters will be kept as individual letters or
+        transformed to the closest non-accented letters.
+    language: str
+        Specify the language for text normalization.        
     skip_prep: bool
         If True, skip data preparation.
 
@@ -96,13 +123,13 @@ def prepare_common_accent(data_folder, save_folder, skip_prep=False):
         return
 
     # Additional checks to make sure the data folder contains Common Accent
-    check_common_accent_folder(data_folder)
+    check_common_accent_folder(data_folder, language=language)
 
     # Audio files extensions
     extension = [".mp3"]
 
     # Create the signal list of train, dev, and test sets.
-    data_split = create_sets(data_folder, extension)
+    data_split = create_sets(data_folder, extension, language=language)
 
     # Creating csv files for training, dev and test data
     create_csv(wav_list=data_split["train"], csv_file=save_csv_train)
@@ -133,7 +160,8 @@ def skip(save_csv_train, save_csv_dev, save_csv_test):
 
     return skip
 
-def create_sets(data_folder, extension):
+import ipdb
+def create_sets(data_folder, extension, language="en"):
     """
     Creates lists for train, dev and test sets with data from the data_folder
 
@@ -151,39 +179,31 @@ def create_sets(data_folder, extension):
     """
 
     # Datasets initialization
-    datasets = {"train", "dev", "test"}
+    datasets = {"train", "validation", "test"}
 
     # Get the list of accents from the dataset folder
-    msg = f"Loading the data of train/dev/test sets!"
+    msg = f"Loading the data of train/validation/test sets!"
     logger.info(msg)
 
     accent_wav_list = []
 
     # Fill the train, dev and test datasets with audio filenames
     for dataset in datasets:
-        curr_csv_file = os.path.join(data_folder, "cv-valid-" + dataset + ".csv")
+        curr_csv_file = os.path.join(data_folder, language, dataset + ".tsv")
         with open(curr_csv_file, "r") as file:
-            csvreader = csv.reader(file)
+            csvreader = csv.reader(file, delimiter='\t')
             for row in csvreader:
-                accent = row[6]  # accent information is in this field
+                accent = row[4]  # accent information is in this field
 
-                # if accent is part of the accents we defined, then, we add it:
+                # if accent is part of the accents (top file dict), then, we add it:
                 if accent in ACCENTS:
-                    wav_path = row[0]
-                    # some wierd thing at IDIAP, you can remove this if you donwload the dataset:
-                    if dataset == "train":
-                        wav_path = wav_path.split("/")
-                        wav_path = os.path.join(
-                            data_folder, wav_path[0], wav_path[1][0:9], wav_path[1]
-                        )
-                    else:
-                        wav_path = os.path.join(data_folder, wav_path)
+                    utt_id = row[1]
+                    wav_path = row[2]
 
-                    # get the other fields:
-                    utt_id = row[0].replace("/", "-").replace(".mp3", "")
-                    
-                    # get transcript and remove comas in case they're present
-                    transcript = row[1].replace(',',' ')
+                    # get transcript and clean it! 
+                    transcript = clean_transcript(row[7], language=language)
+                    # short transcript, remove:
+                    if len(transcript.split()) < 1: continue
 
                     # Peeking at the signal (to retrieve duration in seconds)
                     if os.path.isfile(wav_path):
@@ -193,8 +213,7 @@ def create_sets(data_folder, extension):
                         msg = "\tError loading: %s" % (str(len(wav_path)))
                         logger.info(msg)
                         continue
-
-
+                    # append to list
                     accent_wav_list.append([utt_id, wav_path, transcript, audio_duration, accent])
 
     # Split the data in train/dev/test balanced:
@@ -314,7 +333,7 @@ def create_csv(wav_list, csv_file):
     logger.info(msg)
 
 
-def check_common_accent_folder(data_folder):
+def check_common_accent_folder(data_folder, language='en'):
     """
     Check if the data folder actually contains the CommonAccent dataset.
 
@@ -331,23 +350,123 @@ def check_common_accent_folder(data_folder):
     """
 
     # Checking if at least two accents are present in the data
-    files = set(os.listdir(data_folder))
+    files = set(os.listdir(os.path.join(data_folder, language)))
 
-    if "cv-valid-train.csv" not in files:
-        err_msg = f"{data_folder} must have at the cv-valid-train folder in it."
+    if "train.tsv" not in files:
+        err_msg = f"{data_folder}/{language} must have at least 'train.tsv' file in it."
         raise FileNotFoundError(err_msg)
 
 
 def main():
-
     # read input from CLI, you need to run it from the command lind
-    args = sys.argv[:]
+    parser = argparse.ArgumentParser()
 
-    # 1: data folder with CommonVoice data
-    data_folder = args[1]
-    # 2: where to store the CSV files with the data formatted, that is train/dev/test sets
-    output_folder = args[2]
-    prepare_common_accent(data_folder, output_folder)
+    # reporting vars
+    parser.add_argument(
+        "--language",
+        type=str,
+        default='en',
+        help="Language to load",
+    )
+    parser.add_argument(
+        "cv_folder",
+        help="path of the input folder, where CV dataset is stored (files in TSV format)",
+    )
+    parser.add_argument(
+        "output_folder",
+        help="path of the output folder to store the csv files for each split",
+    )
+    # parse the arguments and run the preparation    
+    args = parser.parse_args()
+    prepare_common_accent(args.cv_folder, args.output_folder, language=args.language)
+
+def clean_transcript(words, language='en', accented_letters=False):
+    """ function to clean the input transcript 
+        input:
+        words: transcript
+        language: language of the sample, default=en
+        accented_letters: whether to remove accented_letters
+    """
+    def unicode_normalisation(text):
+        try:
+            text = unicode(text, "utf-8")
+        except NameError:  # unicode is a default on python 3
+            pass
+        return str(text)
+    
+    # Unicode Normalization
+    words = unicode_normalisation(words)
+
+    # !! Language specific cleaning !!
+    # Important: feel free to specify the text normalization
+    # corresponding to your alphabet.
+
+    def strip_accents(text):
+        text = (
+            unicodedata.normalize("NFD", text)
+            .encode("ascii", "ignore")
+            .decode("utf-8")
+        )
+        return str(text)
+
+    if language in ["en", "fr", "it", "rw"]:
+        words = re.sub(
+            "[^’'A-Za-z0-9À-ÖØ-öø-ÿЀ-ӿéæœâçèàûî]+", " ", words
+        ).upper()
+
+    if language == "de":
+        # this replacement helps preserve the case of ß
+        # (and helps retain solitary occurrences of SS)
+        # since python's upper() converts ß to SS.
+        words = words.replace("ß", "0000ß0000")
+        words = re.sub("[^’'A-Za-z0-9öÖäÄüÜß]+", " ", words).upper()
+        words = words.replace("'", " ")
+        words = words.replace("’", " ")
+        words = words.replace(
+            "0000SS0000", "ß"
+        )  # replace 0000SS0000 back to ß as its initial presence in the corpus
+
+    if language == "fr":
+        # Replace J'y D'hui etc by J_ D_hui
+        words = words.replace("'", " ")
+        words = words.replace("’", " ")
+
+    elif language == "ar":
+        HAMZA = "\u0621"
+        ALEF_MADDA = "\u0622"
+        ALEF_HAMZA_ABOVE = "\u0623"
+        letters = (
+            "ابتةثجحخدذرزسشصضطظعغفقكلمنهويىءآأؤإئ"
+            + HAMZA
+            + ALEF_MADDA
+            + ALEF_HAMZA_ABOVE
+        )
+        words = re.sub("[^" + letters + " ]+", "", words).upper()
+    elif language == "ga-IE":
+        # Irish lower() is complicated, but upper() is nondeterministic, so use lowercase
+        def pfxuc(a):
+            return len(a) >= 2 and a[0] in "tn" and a[1] in "AEIOUÁÉÍÓÚ"
+
+        def galc(w):
+            return w.lower() if not pfxuc(w) else w[0] + "-" + w[1:].lower()
+
+        words = re.sub("[^-A-Za-z'ÁÉÍÓÚáéíóú]+", " ", words)
+        words = " ".join(map(galc, words.split(" ")))
+
+    # Remove accents if specified
+    if not accented_letters:
+        words = strip_accents(words)
+        words = words.replace("'", " ")
+        words = words.replace("’", " ")
+
+    # Remove multiple spaces
+    words = re.sub(" +", " ", words)
+
+    # Remove spaces at the beginning and the end of the sentence
+    words = words.lstrip().rstrip()
+    
+    return words
+
 
 # Recipe begins! (when called from CLI)
 if __name__ == "__main__":
