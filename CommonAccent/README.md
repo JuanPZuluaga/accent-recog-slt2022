@@ -1,4 +1,4 @@
-# CommonAccent Dataset (CommonVoice 3.0)
+# CommonAccent Dataset (CommonVoice 11.0)
 
 This dataset is composed of speakers of 16 different Acents that were carefully selected from [CommonVoice](https://commonvoice.mozilla.org/) database. The total duration of audio recordings is ~53 hours. The data `common_accent_prepare.py` script already splits the data into train, dev (validation) and test sets.
 
@@ -18,27 +18,30 @@ python -m pip install -r requirements.txt
 
 Then, you need to create the manifest files, i.e., CSV files with the train/dev/test sets. You can find an example in `CommonAccent/accent_id/data/train.csv`.
 
-To run the file simply do:
+To run the trainin, you need to first prepare the data:
 
 ```python
 conda activate slt_2023
-cd CommonAccent/accent_id/ # run the python script, from this directory
-python common_accent_prepare.py /folder/to/commonvoice/data/ data/
+cd CommonAccent/ # run the python script, from this directory
+python download_data_hf.py --language "en" data/cv_11/
+python common_accent_prepare.py --language "en" data/cv_11 data/
 ```
 
 Info: 
--  `/folder/to/commonvoice/data/`: Folder where you donwloaded CommonVoice, it looks like this (it might be different for you):
+-  `/folder/to/commonvoice/data/`: Folder where you donwloaded CommonVoice 11.0, it looks like this (it might be different for you):
 
 ```python
-├── cv-invalid
-├── cv-other-dev
-├── cv-other-test
-├── cv-other-train
-├── cv-valid-dev
-├── cv-valid-test
-├── cv-valid-train
-└── DeepSpeech
+../
+├── audio
+├── common_voice_11_0.py
+├── count_n_shards.py
+├── languages.py
+├── n_shards.json
+├── README.md
+├── release_stats.py
+└── transcript
 ```
+check: https://huggingface.co/datasets/mozilla-foundation/common_voice_11_0
 
 - `data/`: where to store the manifest files (CSV files).
 
@@ -59,29 +62,33 @@ ID,utt_id,wav,wav_format,duration,accent
 8,cv-valid-dev-sample-001246,/remote/idiap.svm/resource.dataset04/CommonVoice/cv-valid-dev/sample-001246.mp3,mp3,5.640,england
 ```
 
-It might happen that the samples in the train/dev/test sets are not the same for you (random seed, structure of the dataset, etc)... Anyway, that should be ok, at least for creating a proof of concept system (we can do after some kind of K-fold cross-validation).
+It might happen that the samples in the train/dev/test sets are not the same for you (random seed, structure of the dataset, etc)... Anyway, that should be ok, at least for creating a proof of concept system (K-fold cross-validation can be implemented later).
 
 ## List of Accents:
 
-List of accents of the only-English part of CommonVoice 3.0:
+List of accents of the only-English part of CommonVoice 11.0:
 
-* african
-* australia
-* bermuda
-* canada
-* england
-* hongkong
-* indian
-* ireland
-* malaysia
-* newzealand
-* philippines
-* scotland
-* singapore
-* southatlandtic
-* us
-* wales
-
+* Austrian
+* East African Khoja
+* Dutch
+* West Indies and Bermuda (Bahamas, Bermuda, Jamaica, Trinidad)
+* Welsh English
+* Malaysian English
+* Liverpool English,Lancashire English,England English
+* Singaporean English
+* Hong Kong English
+* Filipino
+* Southern African (South Africa, Zimbabwe, Namibia)
+* New Zealand English
+* Irish English
+* Northern Irish
+* Scottish English
+* Australian English
+* German English,Non native speaker
+* Canadian English
+* England English
+* India and South Asia (India, Pakistan, Sri Lanka)
+* United States English
 
 ## Statistics of CommonAccent (TODO: update):
 
@@ -89,8 +96,3 @@ List of accents of the only-English part of CommonVoice 3.0:
 |:---------------------------------:|:------:|:------:|:-----:|
 | **# of utterances**               | 45605 | 1062  | 972 |
 | **Total duration, hr**            | ~50  | 1.24   | 1.15  |
-
-
-## Further statistics
-
-Further data can be obtained from the the CommonVoice dataset. Future work should target other languages and also newer versions of the CommonVoice dataset.
