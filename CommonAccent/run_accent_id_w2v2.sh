@@ -28,8 +28,9 @@ max_batch_len=50
 batch_size=1
 
 # data folder:
-csv_prepared_folder="data"
-output_dir="results/W2V2/"
+language_id="en"
+csv_prepared_folder="data/$language_id"
+output_dir="results/W2V2/EN"
 
 # If augmentation is defined:
 if [ ! "$apply_augmentation" == 'True' ]; then

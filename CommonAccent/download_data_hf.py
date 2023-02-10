@@ -7,7 +7,7 @@ Download the dataset: https://commonvoice.mozilla.org/en/datasets
 
 Author
 ------
-Juan Pablo Zuluaga
+ * Juan Pablo Zuluaga 2023
 """
 import os
 import argparse

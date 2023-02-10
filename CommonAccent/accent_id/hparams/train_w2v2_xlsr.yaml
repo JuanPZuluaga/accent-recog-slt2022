@@ -18,7 +18,7 @@ output_folder: !ref results/W2V2/xlsr-53-<avg_pool_class>/<seed>
 save_folder: !ref <output_folder>/save
 rir_folder: !ref data/rir_folder
 train_log: !ref <output_folder>/train_log.txt
-device: 'cuda:0'
+# device: 'cuda:0'
 skip_prep: True
 # max audio lenth allowed, higher than this is dropped
 avoid_if_longer_than: 10.0
@@ -38,8 +38,7 @@ error_stats: !name:speechbrain.utils.metric_stats.MetricStats
 
 # Training Parameters
 sample_rate: 16000
-number_of_epochs: 30
-batch_size: 32
+number_of_epochs: 10
 
 # set to TRUE to freeze all wav2vec2
 freeze_wav2vec2: False
@@ -48,7 +47,7 @@ freeze_wav2vec2: False
 freeze_wav2vec2_conv: True
 
 # Number of accents
-n_accents: 16
+n_accents: 21
 
 # batch type of sorting
 sorting: random # sort the samples

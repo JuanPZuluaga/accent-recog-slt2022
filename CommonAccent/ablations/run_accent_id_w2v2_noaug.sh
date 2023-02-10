@@ -26,8 +26,8 @@ apply_augmentation="False"
 max_batch_len=100
 
 # data folder:
-csv_prepared_folder="data"
-output_dir="results/W2V2/"
+csv_prepared_folder="data/en"
+output_dir="results/W2V2/EN"
 
 # If augmentation is defined:
 if [ "$apply_augmentation" == "True" ]; then

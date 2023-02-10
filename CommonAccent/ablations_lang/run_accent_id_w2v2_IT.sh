@@ -6,7 +6,7 @@
 #
 # SPDX-License-Identifier: MIT-License 
 
-# Base script to fine-tunine a XLSR-53 (wav2vec2.0) on Accent Classification for English
+# Base script to fine-tunine a XLSR-53 (wav2vec2.0) on Accent Classification for Italian
 #######################################
 # COMMAND LINE OPTIONS,
 # high-level variables for training the model. TrainingArguments (HuggingFace)
@@ -24,10 +24,11 @@ wav2vec2_hub="facebook/wav2vec2-large-xlsr-53"
 seed="1986"
 apply_augmentation="True"
 max_batch_len=40
+n_accents=5
 
 # data folder:
-csv_prepared_folder="data/en"
-output_dir="results/W2V2/EN"
+csv_prepared_folder="data/it"
+output_dir="results/W2V2/IT/"
 
 # If augmentation is defined:
 if [ "$apply_augmentation" == "True" ]; then
@@ -53,6 +54,7 @@ $cmd python3 accent_id/train_w2v2.py accent_id/hparams/train_w2v2_xlsr.yaml \
     --seed=$seed \
     --skip_prep="True" \
     --rir_folder="$rir_folder" \
+    --n_accents="$n_accents" \
     --csv_prepared_folder=$csv_prepared_folder \
     --apply_augmentation="$apply_augmentation" \
     --max_batch_len="$max_batch_len" \

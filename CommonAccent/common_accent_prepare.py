@@ -1,11 +1,11 @@
 """
 Data preparation of CommonAccent dataset for Accent classification (English).
-(For now, we are using version 7.0)
+(Recipe that uses CV version 11.0)
 Download: https://commonvoice.mozilla.org/en/datasets
 
 Author
 ------
-SLT conference
+ * Juan Pablo Zuluaga 2023
 """
 
 import csv
@@ -35,29 +35,72 @@ logger = logging.getLogger(__name__)
     Select accents with at least 100 samples.
 """
 
-ACCENTS = [
-    "Austrian",
-    "East African Khoja",
-    "Dutch",
-    "West Indies and Bermuda (Bahamas, Bermuda, Jamaica, Trinidad)",
-    "Welsh English",
-    "Malaysian English",
-    "Liverpool English,Lancashire English,England English",
-    "Singaporean English",
-    "Hong Kong English",
-    "Filipino",
-    "Southern African (South Africa, Zimbabwe, Namibia)",
-    "New Zealand English",
-    "Irish English",
-    "Northern Irish",
-    "Scottish English",
-    "Australian English",
-    "German English,Non native speaker",
-    "Canadian English",
-    "England English",
-    "India and South Asia (India, Pakistan, Sri Lanka)",
-    "United States English",
+_ACCENTS_EN = [
+    1e5,
+    "Austrian", # 104
+    "East African Khoja", # 107
+    "Dutch", # 108
+    "West Indies and Bermuda (Bahamas, Bermuda, Jamaica, Trinidad)", # 282
+    "Welsh English", # 623
+    "Malaysian English", # 1004
+    "Liverpool English,Lancashire English,England English", # 2571
+    "Singaporean English", # 2792
+    "Hong Kong English", # 2951
+    "Filipino", # 4030
+    "Southern African (South Africa, Zimbabwe, Namibia)", # 4270
+    "New Zealand English", # 4960
+    "Irish English", # 6339
+    "Northern Irish", # 6862
+    "Scottish English", # 10817
+    "Australian English", # 33335
+    "German English,Non native speaker", # 41258
+    "Canadian English", # 45640
+    "England English", # 75772
+    "India and South Asia (India, Pakistan, Sri Lanka)", # 79043
+    "United States English", # 249284
 ]
+_ACCENTS_FR = [
+    3e4,
+    "Français d’Algérie", # 319 
+    "Français d’Allemagne", # 355 
+    "Français du Bénin", # 823 
+    "Français de La Réunion", # 884 
+    "Français des États-Unis", # 898 
+    "Français de Suisse", # 3608 
+    "Français de Belgique", # 6509 
+    "Français du Canada", # 8073 
+    "Français de France", # 342921
+]
+_ACCENTS_DE = [
+    1e5,
+    "Italienisch Deutsch", # 947 
+    "Schweizerdeutsch", # 9891 
+    "Österreichisches Deutsch", # 16066 
+    "Nordrhein-Westfalen,Bundesdeutsch, Hochdeutsch,Deutschland Deutsch", # 50843 
+    "Deutschland Deutsch", # 252709
+]
+_ACCENTS_IT = [
+    1e4,
+    "Emiliano", # 151
+    "Meridionale", # 193
+    "Veneto", # 1508
+    "Tendente al siculo, ma non marcato", # 2175
+    "Basilicata,trentino", # 2297
+]
+_ACCENTS_ES = [
+    1e5,
+    "España: Islas Canarias", # 1326
+    "Chileno: Chile, Cuyo", # 4285
+    "América central", # 6031
+    "Caribe: Cuba, Venezuela, Puerto Rico, República Dominicana, Panamá, Colombia caribeña, México caribeño, Costa del golfo de México", # 8329
+    "España: Centro-Sur peninsular (Madrid, Toledo, Castilla-La Mancha)", # 8683
+    "Rioplatense: Argentina, Uruguay, este de Bolivia, Paraguay", # 11162
+    "Andino-Pacífico: Colombia, Perú, Ecuador, oeste de Bolivia y Venezuela andina", # 12997
+    "México", # 26136
+    "España: Norte peninsular (Asturias, Castilla y León, Cantabria, País Vasco, Navarra, Aragón, La Rioja, Guadalajara, Cuenca)", # 30588
+    "España: Sur peninsular (Andalucia, Extremadura, Murcia)", # 38251
+]
+
 
 def prepare_common_accent(
         data_folder, 
@@ -177,6 +220,23 @@ def create_sets(data_folder, extension, language="en"):
     -------
     dictionary containing train, dev, and test splits.
     """
+    # get the ACCENT dictionary from accent_configuration
+    if language == "en":
+        ACCENTS = _ACCENTS_EN
+    elif language == "it":
+        ACCENTS = _ACCENTS_IT
+    elif language == "de":
+        ACCENTS = _ACCENTS_DE
+    elif language == "fr":
+        ACCENTS = _ACCENTS_FR
+    elif language == "es":
+        ACCENTS = _ACCENTS_ES
+    
+    # get the max_samples_per_accent from the list:
+    max_samples_per_accent = ACCENTS[0]
+    
+    # accent counter to balance the datasets:
+    accent_counter = { acc_id: 0 for acc_id in ACCENTS}
 
     # Datasets initialization
     datasets = {"train", "validation", "test"}
@@ -197,6 +257,10 @@ def create_sets(data_folder, extension, language="en"):
 
                 # if accent is part of the accents (top file dict), then, we add it:
                 if accent in ACCENTS:
+                    
+                    # check if we have reached the max_samples per accent:
+                    if accent_counter[accent] > max_samples_per_accent:
+                        continue
                     utt_id = row[1]
                     wav_path = row[2]
 
@@ -204,6 +268,9 @@ def create_sets(data_folder, extension, language="en"):
                     transcript = clean_transcript(row[7], language=language)
                     # short transcript, remove:
                     if len(transcript.split()) < 1: continue
+
+                    # also we clean the label, which will be used during training
+                    clean_accent = clean_transcript(accent, language=language)
 
                     # Peeking at the signal (to retrieve duration in seconds)
                     if os.path.isfile(wav_path):
@@ -214,7 +281,10 @@ def create_sets(data_folder, extension, language="en"):
                         logger.info(msg)
                         continue
                     # append to list
-                    accent_wav_list.append([utt_id, wav_path, transcript, audio_duration, accent])
+                    accent_wav_list.append([utt_id, wav_path, transcript, audio_duration, clean_accent])
+
+                    # update the accent counter
+                    accent_counter[accent] += 1
 
     # Split the data in train/dev/test balanced:
     df = pd.DataFrame(
@@ -453,17 +523,31 @@ def clean_transcript(words, language='en', accented_letters=False):
         words = re.sub("[^-A-Za-z'ÁÉÍÓÚáéíóú]+", " ", words)
         words = " ".join(map(galc, words.split(" ")))
 
+    # regex with predifined symbols to ignore/remove,
+    chars_to_ignore_regex2 = '[\{\[\]\<\>\/\,\?\.\!\u00AC\;\:"\\%\\\]|[0-9]'
+
+    words = re.sub(chars_to_ignore_regex2, "", words)
+
     # Remove accents if specified
     if not accented_letters:
         words = strip_accents(words)
         words = words.replace("'", " ")
         words = words.replace("’", " ")
+        words = words.replace("\u2013", "-")
+        words = words.replace("\u2014", "-")
+        words = words.replace("\u2018", "'")
+        words = words.replace("\u201C", "")
+        words = words.replace("\u201D", "")
+        words = words.replace("ñ", "n")
+        words = words.replace(" - ", " ")
+        words = words.replace("-", "")
+        words = words.replace("'", " ")
 
     # Remove multiple spaces
     words = re.sub(" +", " ", words)
 
     # Remove spaces at the beginning and the end of the sentence
-    words = words.lstrip().rstrip()
+    words = words.lstrip().rstrip().upper()
     
     return words
 

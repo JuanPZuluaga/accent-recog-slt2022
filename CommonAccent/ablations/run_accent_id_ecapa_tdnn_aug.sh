@@ -24,8 +24,8 @@ apply_augmentation="True"
 max_batch_len=150
 
 # data folder:
-csv_prepared_folder="data"
-output_dir="results/ECAPA-TDNN/spkrec-ecapa-voxceleb"
+csv_prepared_folder="data/en"
+output_dir="results/ECAPA-TDNN/EN/spkrec-ecapa-voxceleb"
 
 # If augmentation is defined:
 if [ "$apply_augmentation" == "True" ]; then

@@ -28,10 +28,11 @@ wav2vec2_hub="facebook/wav2vec2-large-xlsr-53"
 seed="1986"
 apply_augmentation="True"
 max_batch_len=40
+n_accents=21
 
 # data folder:
-csv_prepared_folder="data"
-output_dir="results/W2V2/"
+csv_prepared_folder="data/en"
+output_dir="results/W2V2/EN"
 
 echo "*** About to start the Pooling Strategy Ablation ***"
 
@@ -62,10 +63,11 @@ for pooling_strategy in "${pooling_strategies[@]}"; do
 
     # running the training
     $cmd python3 accent_id/train_w2v2.py accent_id/hparams/train_w2v2_xlsr.yaml \
-        --seed=$seed \
+        --seed="$seed" \
         --skip_prep="True" \
         --rir_folder="$rir_folder" \
-        --csv_prepared_folder=$csv_prepared_folder \
+        --n_accents="$n_accents" \
+        --csv_prepared_folder="$csv_prepared_folder" \
         --apply_augmentation="$apply_augmentation" \
         --max_batch_len="$max_batch_len" \
         --output_folder="$output_folder" \

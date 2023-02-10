@@ -48,7 +48,7 @@ freeze_wav2vec2: False
 freeze_wav2vec2_conv: True
 
 # Number of accents
-n_accents: 16
+n_accents: 21
 
 # batch type of sorting
 sorting: random # sort the samples
