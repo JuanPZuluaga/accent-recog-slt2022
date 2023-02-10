@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 """
 
 _ACCENTS_EN = [
-    1e5,
+    4e4, # max 40000 samples per accent
     "Austrian", # 104
     "East African Khoja", # 107
     "Dutch", # 108
@@ -60,7 +60,7 @@ _ACCENTS_EN = [
     "United States English", # 249284
 ]
 _ACCENTS_FR = [
-    3e4,
+    3e4, # max 30000 samples per accent
     "Français d’Algérie", # 319 
     "Français d’Allemagne", # 355 
     "Français du Bénin", # 823 
@@ -72,7 +72,7 @@ _ACCENTS_FR = [
     "Français de France", # 342921
 ]
 _ACCENTS_DE = [
-    1e5,
+    1e5, # max 100000 samples per accent
     "Italienisch Deutsch", # 947 
     "Schweizerdeutsch", # 9891 
     "Österreichisches Deutsch", # 16066 
@@ -80,7 +80,7 @@ _ACCENTS_DE = [
     "Deutschland Deutsch", # 252709
 ]
 _ACCENTS_IT = [
-    1e4,
+    1e5, # max 100000 samples per accent
     "Emiliano", # 151
     "Meridionale", # 193
     "Veneto", # 1508
@@ -88,7 +88,7 @@ _ACCENTS_IT = [
     "Basilicata,trentino", # 2297
 ]
 _ACCENTS_ES = [
-    1e5,
+    1e5, # max 100000 samples per accent
     "España: Islas Canarias", # 1326
     "Chileno: Chile, Cuyo", # 4285
     "América central", # 6031

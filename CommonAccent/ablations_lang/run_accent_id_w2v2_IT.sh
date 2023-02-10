@@ -55,6 +55,7 @@ $cmd python3 accent_id/train_w2v2.py accent_id/hparams/train_w2v2_xlsr.yaml \
     --skip_prep="True" \
     --rir_folder="$rir_folder" \
     --n_accents="$n_accents" \
+    --number_of_epochs=50 \
     --csv_prepared_folder=$csv_prepared_folder \
     --apply_augmentation="$apply_augmentation" \
     --max_batch_len="$max_batch_len" \

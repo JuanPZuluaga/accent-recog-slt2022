@@ -38,6 +38,7 @@ echo "*** About to start the Pooling Strategy Ablation ***"
 
 # ablation, pooling strategy
 pooling_strategies="statpool adaptivepool avgpool"
+# pooling_strategies="statpool"
 pooling_strategies=($pooling_strategies)
 
 for pooling_strategy in "${pooling_strategies[@]}"; do
