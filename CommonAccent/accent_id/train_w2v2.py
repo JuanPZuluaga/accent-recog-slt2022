@@ -45,7 +45,9 @@ class AID(sb.Brain):
             wavs_noise = self.modules.env_corrupt(wavs, wav_lens)
             wavs = torch.cat([wavs, wavs_noise], dim=0)
             wav_lens = torch.cat([wav_lens, wav_lens], dim=0)
-            wavs = self.hparams.augmentation(wavs, wav_lens)
+        
+            if hasattr(self.hparams, "augmentation"):
+                wavs = self.hparams.augmentation(wavs, wav_lens)
 
         # forward pass HF (possible: pre-trained) model
         # feats = self.modules.wav2vec2(wavs, wav_lens=wav_lens)
@@ -332,8 +334,13 @@ def dataio_prep(hparams):
         This is done on the CPU in the `collate_fn`."""
         # sig, _ = torchaudio.load(wav)
         # sig = sig.transpose(0, 1).squeeze(1)
-        sig, _ = librosa.load(wav, sr=hparams["sample_rate"])
-        sig = torch.tensor(sig)
+        # sig, _ = librosa.load(wav, sr=hparams["sample_rate"])
+        # sig = torch.tensor(sig)
+        info = torchaudio.info(wav)
+        sig = sb.dataio.dataio.read_audio(wav)
+        sig = torchaudio.transforms.Resample(
+            info.sample_rate, hparams["sample_rate"],
+        )(sig)
         return sig
 
     sb.dataio.dataset.add_dynamic_item(datasets, audio_pipeline)

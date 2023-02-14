@@ -21,9 +21,10 @@ cmd='/remote/idiap.svm/temp.speech01/jzuluaga/kaldi-jul-2020/egs/wsj/s5/utils/pa
 
 # model from HF hub, it could be another one, e.g., facebook/wav2vec2-base
 wav2vec2_hub="facebook/wav2vec2-large-xlsr-53"
+wav2vec2_hub="facebook/wav2vec2-base"
 seed="1986"
 apply_augmentation="False"
-max_batch_len=100
+max_batch_len=600
 
 # data folder:
 csv_prepared_folder="data/en"

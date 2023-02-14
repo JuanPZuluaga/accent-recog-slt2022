@@ -67,3 +67,4 @@ _ACCENTS_ES = [
     "España: Norte peninsular (Asturias, Castilla y León, Cantabria, País Vasco, Navarra, Aragón, La Rioja, Guadalajara, Cuenca)", # 30588
     "España: Sur peninsular (Andalucia, Extremadura, Murcia)", # 38251
 ]
+

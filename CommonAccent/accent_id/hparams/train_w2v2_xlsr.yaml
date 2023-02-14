@@ -18,7 +18,7 @@ output_folder: !ref results/W2V2/xlsr-53-<avg_pool_class>/<seed>
 save_folder: !ref <output_folder>/save
 rir_folder: !ref data/rir_folder
 train_log: !ref <output_folder>/train_log.txt
-# device: 'cuda:0'
+device: 'cuda:0'
 skip_prep: True
 # max audio lenth allowed, higher than this is dropped
 avoid_if_longer_than: 10.0
@@ -90,11 +90,19 @@ env_corrupt: !new:speechbrain.lobes.augment.EnvCorrupt
     noise_snr_high: 15
     rir_scale_factor: 1.0
 
-# Adds speech change + time and frequency dropouts (time-domain implementation)
+# Adds SpecAugment
 # A small speed change help to improve the performance of speaker-id as well.
-augmentation: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
-    sample_rate: !ref <sample_rate>
-    speeds: [95, 100, 105]
+augmentation: !new:speechbrain.lobes.augment.SpecAugment
+    time_warp: True
+    time_warp_window: 5
+    time_warp_mode: bicubic
+    freq_mask: True
+    n_freq_mask: 2
+    time_mask: True
+    n_time_mask: 2
+    replace_with_zero: False
+    freq_mask_width: 30
+    time_mask_width: 40
 
 # Model parameters
 activation: !name:torch.nn.GELU

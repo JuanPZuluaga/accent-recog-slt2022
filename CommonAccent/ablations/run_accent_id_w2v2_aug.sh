@@ -23,20 +23,11 @@ cmd='/remote/idiap.svm/temp.speech01/jzuluaga/kaldi-jul-2020/egs/wsj/s5/utils/pa
 wav2vec2_hub="facebook/wav2vec2-large-xlsr-53"
 seed="1986"
 apply_augmentation="True"
-max_batch_len=40
+max_batch_len=300
 
 # data folder:
 csv_prepared_folder="data/en"
 output_dir="results/W2V2/EN"
-
-# If augmentation is defined:
-if [ "$apply_augmentation" == "True" ]; then
-    output_folder="$output_dir/$(basename $wav2vec2_hub)-augmented/$seed"
-    rir_folder="data/rir_folder/"
-else
-    output_folder="$output_dir/$(basename $wav2vec2_hub)/$seed"
-    rir_folder=""
-fi
 
 # configure a GPU to use if we a defined 'CMD'
 if [ ! "$cmd" == 'none' ]; then

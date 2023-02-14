@@ -24,10 +24,10 @@ cmd='/remote/idiap.svm/temp.speech01/jzuluaga/kaldi-jul-2020/egs/wsj/s5/utils/pa
 # training vars
 
 # model from HF hub, it could be another one, e.g., facebook/wav2vec2-base
-wav2vec2_hub="facebook/wav2vec2-large-xlsr-53"
+wav2vec2_hub="facebook/wav2vec2-large-xlsr-53"; hparams="train_w2v2_xlsr.yaml"
+wav2vec2_hub="facebook/wav2vec2-base"; hparams="train_w2v2.yaml"
 seed="1986"
-apply_augmentation="True"
-max_batch_len=40
+apply_augmentation="False"
 n_accents=21
 
 # data folder:
@@ -38,7 +38,6 @@ echo "*** About to start the Pooling Strategy Ablation ***"
 
 # ablation, pooling strategy
 pooling_strategies="statpool adaptivepool avgpool"
-# pooling_strategies="statpool"
 pooling_strategies=($pooling_strategies)
 
 for pooling_strategy in "${pooling_strategies[@]}"; do
@@ -47,9 +46,11 @@ for pooling_strategy in "${pooling_strategies[@]}"; do
     if [ "$apply_augmentation" == "True" ]; then
         output_folder="$output_dir/$(basename $wav2vec2_hub)-augmented-$pooling_strategy/$seed"
         rir_folder="data/rir_folder/"
+        max_batch_len=300
     else
         output_folder="$output_dir/$(basename $wav2vec2_hub)-$pooling_strategy/$seed"
         rir_folder=""
+        max_batch_len=600
     fi
 
     # configure a GPU to use if we a defined 'CMD'
@@ -63,7 +64,7 @@ for pooling_strategy in "${pooling_strategies[@]}"; do
     echo "training model in $output_folder"
 
     # running the training
-    $cmd python3 accent_id/train_w2v2.py accent_id/hparams/train_w2v2_xlsr.yaml \
+    $cmd python3 accent_id/train_w2v2.py accent_id/hparams/$hparams \
         --seed="$seed" \
         --skip_prep="True" \
         --rir_folder="$rir_folder" \

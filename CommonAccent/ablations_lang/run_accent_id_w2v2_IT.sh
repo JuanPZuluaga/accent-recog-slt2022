@@ -18,49 +18,70 @@ set -euo pipefail
 cmd='/remote/idiap.svm/temp.speech01/jzuluaga/kaldi-jul-2020/egs/wsj/s5/utils/parallel/queue.pl -l gpu -P minerva -l h='vgn[ij]*' -V'
 
 # training vars
-
 # model from HF hub, it could be another one, e.g., facebook/wav2vec2-base
-wav2vec2_hub="facebook/wav2vec2-large-xlsr-53"
+wav2vec2_hub="facebook/wav2vec2-large-xlsr-53"; hparams="train_w2v2_xlsr.yaml"
+wav2vec2_hub="facebook/wav2vec2-base"; hparams="train_w2v2.yaml"
+
 seed="1986"
 apply_augmentation="True"
-max_batch_len=40
 n_accents=5
 
 # data folder:
 csv_prepared_folder="data/it"
 output_dir="results/W2V2/IT/"
 
-# If augmentation is defined:
-if [ "$apply_augmentation" == "True" ]; then
-    output_folder="$output_dir/$(basename $wav2vec2_hub)-augmented/$seed"
-    rir_folder="data/rir_folder/"
-else
-    output_folder="$output_dir/$(basename $wav2vec2_hub)/$seed"
-    rir_folder=""
+# ablation, different learning rates
+lr_rates="0.001 0.0001 0.00001"
+lr_rates=($lr_rates)
+
+for lr_rate in "${lr_rates[@]}"; do
+(
+    # If augmentation is defined:
+    if [ "$apply_augmentation" == "True" ]; then
+        output_folder="$output_dir/$(basename $wav2vec2_hub)-augmented/$lr_rate/$seed"
+        rir_folder="data/rir_folder/"
+        max_batch_len=300
+    else
+        output_folder="$output_dir/$(basename $wav2vec2_hub)/$lr_rate/$seed"
+        rir_folder=""
+        max_batch_len=600
+    fi
+
+    # configure a GPU to use if we a defined 'CMD'
+    if [ ! "$cmd" == 'none' ]; then
+        basename=train_$(basename $wav2vec2_hub)_${apply_augmentation}_augmentation_lr-${lr_rate}
+        cmd="$cmd -N ${basename} ${output_folder}/log/train_log"
+    else
+        cmd=''
+    fi
+
+    echo "*** About to start the training ***"
+    echo "*** output folder: $output_folder ***"
+    
+    rm -rf ${output_folder}/log/.error
+    echo "training model in $output_folder"
+
+    $cmd python3 accent_id/train_w2v2.py accent_id/hparams/$hparams \
+        --seed="$seed" \
+        --lr_wav2vec2="$lr_rate" \
+        --skip_prep="True" \
+        --rir_folder="$rir_folder" \
+        --n_accents="$n_accents" \
+        --number_of_epochs=50 \
+        --csv_prepared_folder=$csv_prepared_folder \
+        --apply_augmentation="$apply_augmentation" \
+        --max_batch_len="$max_batch_len" \
+        --output_folder="$output_folder" \
+        --wav2vec2_hub="$wav2vec2_hub"
+
+) || touch ${output_folder}/log/.error &
+done
+wait
+if [ -f ${output_folder}/log/.error ]; then
+    echo "$0: something went wrong while training the model:"
+    echo "$0: ${output_folder}/log/.error"
+    exit 1
 fi
-
-# configure a GPU to use if we a defined 'CMD'
-if [ ! "$cmd" == 'none' ]; then
-  basename=train_$(basename $wav2vec2_hub)_${apply_augmentation}_augmentation
-  cmd="$cmd -N ${basename} ${output_folder}/log/train_log"
-else
-  cmd=''
-fi
-
-echo "*** About to start the training ***"
-echo "*** output folder: $output_folder ***"
-
-$cmd python3 accent_id/train_w2v2.py accent_id/hparams/train_w2v2_xlsr.yaml \
-    --seed=$seed \
-    --skip_prep="True" \
-    --rir_folder="$rir_folder" \
-    --n_accents="$n_accents" \
-    --number_of_epochs=50 \
-    --csv_prepared_folder=$csv_prepared_folder \
-    --apply_augmentation="$apply_augmentation" \
-    --max_batch_len="$max_batch_len" \
-    --output_folder="$output_folder" \
-    --wav2vec2_hub="$wav2vec2_hub" 
 
 echo "Done training of $model in $output_folder"
 exit 0
