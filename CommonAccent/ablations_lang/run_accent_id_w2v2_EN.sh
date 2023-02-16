@@ -6,7 +6,7 @@
 #
 # SPDX-License-Identifier: MIT-License 
 
-# Base script to fine-tunine a XLSR-53 (wav2vec2.0) on Accent Classification for Italian
+# Base script to fine-tunine a XLSR-53 (wav2vec2.0) on Accent Classification for German
 #######################################
 # COMMAND LINE OPTIONS,
 # high-level variables for training the model. TrainingArguments (HuggingFace)
@@ -18,9 +18,9 @@ set -euo pipefail
 cmd='/remote/idiap.svm/temp.speech01/jzuluaga/kaldi-jul-2020/egs/wsj/s5/utils/parallel/queue.pl -l gpu -P minerva -l h='vgn[ij]*' -V'
 
 # data folder:
-csv_prepared_folder="data/it"
-output_dir="results/W2V2/IT/"
-n_accents=5
+csv_prepared_folder="data/en"
+output_dir="results/W2V2/EN/"
+n_accents=21
 
 # training vars
 # model from HF hub, it could be another one, e.g., facebook/wav2vec2-base
@@ -29,6 +29,7 @@ wav2vec2_hub="facebook/wav2vec2-base"; hparams="train_w2v2.yaml"
 
 seed="1986"
 apply_augmentation="False"
+
 
 # ablation, different learning rates
 lr_rates="0.001 0.0001 0.0005 0.00001"
@@ -41,11 +42,11 @@ for lr_rate in "${lr_rates[@]}"; do
     if [ "$apply_augmentation" == "True" ]; then
         output_folder="$output_dir/$(basename $wav2vec2_hub)-augmented/$lr_rate/$seed"
         rir_folder="data/rir_folder/"
-        max_batch_len=250
+        max_batch_len=200
     else
         output_folder="$output_dir/$(basename $wav2vec2_hub)/$lr_rate/$seed"
         rir_folder=""
-        max_batch_len=400
+        max_batch_len=300
     fi
 
     # configure a GPU to use if we a defined 'CMD'

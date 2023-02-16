@@ -17,21 +17,21 @@ set -euo pipefail
 # static vars
 cmd='/remote/idiap.svm/temp.speech01/jzuluaga/kaldi-jul-2020/egs/wsj/s5/utils/parallel/queue.pl -l gpu -P minerva -l h='vgn[ij]*' -V'
 
-# training vars
-
-# model from HF hub, it could be another one, e.g., facebook/wav2vec2-base
-wav2vec2_hub="facebook/wav2vec2-large-xlsr-53"; hparams="train_w2v2_xlsr.yaml"
-wav2vec2_hub="facebook/wav2vec2-base"; hparams="train_w2v2.yaml"
-seed="1986"
-apply_augmentation="True"
-n_accents=10
-
 # data folder:
 csv_prepared_folder="data/es"
 output_dir="results/W2V2/ES/"
+n_accents=10
 
+# training vars
+# model from HF hub, it could be another one, e.g., facebook/wav2vec2-base
+wav2vec2_hub="facebook/wav2vec2-large-xlsr-53"; hparams="train_w2v2_xlsr.yaml"
+wav2vec2_hub="facebook/wav2vec2-base"; hparams="train_w2v2.yaml"
+
+seed="1986"
+apply_augmentation="False"
 
 # ablation, different learning rates
+lr_rates="0.001 0.0001 0.0005 0.00001"
 lr_rates="0.001 0.0001 0.00001"
 lr_rates=($lr_rates)
 
@@ -41,11 +41,11 @@ for lr_rate in "${lr_rates[@]}"; do
     if [ "$apply_augmentation" == "True" ]; then
         output_folder="$output_dir/$(basename $wav2vec2_hub)-augmented/$lr_rate/$seed"
         rir_folder="data/rir_folder/"
-        max_batch_len=300
+        max_batch_len=200
     else
         output_folder="$output_dir/$(basename $wav2vec2_hub)/$lr_rate/$seed"
         rir_folder=""
-        max_batch_len=600
+        max_batch_len=300
     fi
 
     # configure a GPU to use if we a defined 'CMD'

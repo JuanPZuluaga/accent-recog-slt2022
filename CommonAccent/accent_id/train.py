@@ -45,7 +45,9 @@ class AID(sb.Brain):
             wavs_noise = self.modules.env_corrupt(wavs, lens)
             wavs = torch.cat([wavs, wavs_noise], dim=0)
             lens = torch.cat([lens, lens], dim=0)
-            wavs = self.hparams.augmentation(wavs, lens)
+
+            if hasattr(self.hparams, "augmentation"):
+                wavs = self.hparams.augmentation(wavs, lens)
 
         # Feature extraction and normalization
         feats = self.modules.compute_features(wavs)
@@ -111,7 +113,7 @@ class AID(sb.Brain):
                 self.hparams.lr_annealing.on_batch_end(self.optimizer)
 
         # get the final loss
-        loss = self.hparams.compute_cost(predictions, targets)
+        loss = self.hparams.compute_cost(predictions, targets, lens)
 
         # append the metrics for evaluation
         if stage != sb.Stage.TRAIN:

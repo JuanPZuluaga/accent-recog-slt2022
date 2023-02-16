@@ -94,19 +94,10 @@ env_corrupt: !new:speechbrain.lobes.augment.EnvCorrupt
     noise_snr_high: 15
     rir_scale_factor: 1.0
 
-# Adds SpecAugment
 # A small speed change help to improve the performance of speaker-id as well.
-augmentation: !new:speechbrain.lobes.augment.SpecAugment
-    time_warp: True
-    time_warp_window: 5
-    time_warp_mode: bicubic
-    freq_mask: True
-    n_freq_mask: 2
-    time_mask: True
-    n_time_mask: 2
-    replace_with_zero: False
-    freq_mask_width: 30
-    time_mask_width: 40
+augmentation: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
+   sample_rate: !ref <sample_rate>
+   speeds: [95, 100, 105]
 
 # Feature extraction
 compute_features: !new:speechbrain.lobes.features.Fbank

@@ -35,6 +35,7 @@ train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
 error_stats: !name:speechbrain.utils.metric_stats.MetricStats
     metric: !name:speechbrain.nnet.losses.classification_error
         reduction: batch
+acc_computer: !name:speechbrain.utils.Accuracy.AccuracyStats
 
 # Training Parameters
 sample_rate: 16000
@@ -45,7 +46,7 @@ batch_size: 32
 freeze_wav2vec2: False
 # set to true to freeze the CONV part of the wav2vec2 model
 # We see an improvement of 2% with freezing CNNs
-freeze_wav2vec2_conv: True
+freeze_wav2vec2_conv: False
 
 # Number of accents
 n_accents: 21
@@ -86,16 +87,21 @@ env_corrupt: !new:speechbrain.lobes.augment.EnvCorrupt
     openrir_folder: !ref <rir_folder>
     openrir_max_noise_len: 3.0  # seconds
     babble_prob: 0.0
-    reverb_prob: 1.0
-    noise_prob: 1.0
-    noise_snr_low: 0
-    noise_snr_high: 15
+    reverb_prob: 0.5
+    noise_prob: 0.5
+    noise_snr_low: 10
+    noise_snr_high: 20
     rir_scale_factor: 1.0
 
 # A small speed change help to improve the performance of speaker-id as well.
 augmentation: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
    sample_rate: !ref <sample_rate>
    speeds: [95, 100, 105]
+
+# Mean and std normalization of the input features
+mean_var_norm_input: !new:speechbrain.processing.features.InputNormalization
+    norm_type: sentence
+    std_norm: False
 
 # Model parameters
 activation: !name:torch.nn.GELU
@@ -113,10 +119,17 @@ wav2vec2: !new:speechbrain.lobes.models.huggingface_wav2vec.HuggingFaceWav2Vec2
 # possible classes are statpool, adaptivepool, avgpool
 avg_pool_class: statpool
 
-output_mlp: !new:speechbrain.nnet.linear.Linear
+# output_mlp: !new:speechbrain.nnet.linear.Linear
+#     input_size: !ref <encoder_dim>
+#     n_neurons: !ref <n_accents>
+#     bias: False
+
+# classifier: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
+#     input_size: !ref <encoder_dim>
+#     out_neurons: !ref <n_accents>
+output_mlp: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
     input_size: !ref <encoder_dim>
-    n_neurons: !ref <n_accents>
-    bias: False
+    out_neurons: !ref <n_accents>
 
 # The first object passed to the Brain class is this "Epoch Counter"
 # which is saved by the Checkpointer so that training can be resumed
@@ -131,44 +144,57 @@ modules:
     augmentation: !ref <augmentation>
     wav2vec2: !ref <wav2vec2>
     output_mlp: !ref <output_mlp>
+    mean_var_norm_input: !ref <mean_var_norm_input>        
 
 model: !new:torch.nn.ModuleList
    - [!ref <output_mlp>]
 
 # Additive Angular Margin
-# compute_cost: !new:speechbrain.nnet.losses.LogSoftmaxWrapper
-#     loss_fn: !new:speechbrain.nnet.losses.AdditiveAngularMargin
-#         margin: 0.2
-#         scale: 30
+compute_cost: !new:speechbrain.nnet.losses.LogSoftmaxWrapper
+    loss_fn: !new:speechbrain.nnet.losses.AdditiveAngularMargin
+        margin: 0.2
+        scale: 30
 
 # standard NLL loss
-compute_cost: !name:speechbrain.nnet.losses.nll_loss
+# compute_cost: !name:speechbrain.nnet.losses.nll_loss
 
 log_softmax: !new:speechbrain.nnet.activations.Softmax
     apply_log: True
 
 # Learning rates for normal optimizer and W2V2 model
 lr: 0.0001
-lr_wav2vec2: 0.00001
+lr_wav2vec2: 0.0001
 
 # Optimizers class 
-opt_class: !name:torch.optim.Adam
+opt_class: !name:torch.optim.AdamW
     lr: !ref <lr>
+    betas: (0.9, 0.98)
+    eps: 0.000000001
 
-wav2vec2_opt_class: !name:torch.optim.Adam
+wav2vec2_opt_class: !name:torch.optim.AdamW
     lr: !ref <lr_wav2vec2>
+    betas: (0.9, 0.98)
+    eps: 0.000000001
 
 # LR annealing objects
-lr_annealing: !new:speechbrain.nnet.schedulers.NewBobScheduler
-    initial_value: !ref <lr>
-    improvement_threshold: 0.0025
-    annealing_factor: 0.9
-    patient: 0
+# lr_annealing: !new:speechbrain.nnet.schedulers.NewBobScheduler
+#     initial_value: !ref <lr>
+#     improvement_threshold: 0.0025
+#     annealing_factor: 0.9
+#     patient: 0
+# lr_annealing_wav2vec2: !new:speechbrain.nnet.schedulers.NewBobScheduler
+#     initial_value: !ref <lr_wav2vec2>
+#     improvement_threshold: 0.0025
+#     annealing_factor: 0.9
 
-lr_annealing_wav2vec2: !new:speechbrain.nnet.schedulers.NewBobScheduler
-    initial_value: !ref <lr_wav2vec2>
-    improvement_threshold: 0.0025
-    annealing_factor: 0.9
+noam_annealing: !new:speechbrain.nnet.schedulers.NoamScheduler
+    lr_initial: !ref <lr>
+    n_warmup_steps: 25000
+
+noam_annealing_w2v2: !new:speechbrain.nnet.schedulers.NoamScheduler
+    lr_initial: !ref <lr_wav2vec2>
+    n_warmup_steps: 25000
+
 
 # This object is used for saving the state of training both so that it
 # can be resumed if it gets interrupted, and also so that the best checkpoint
@@ -178,6 +204,7 @@ checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
     recoverables:
         model: !ref <model>
         wav2vec2: !ref <wav2vec2>
-        lr_annealing_output: !ref <lr_annealing>
-        lr_annealing_wav2vec2: !ref <lr_annealing_wav2vec2>
+        noam_annealing: !ref <noam_annealing>
+        noam_annealing_w2v2: !ref <noam_annealing_w2v2>
         counter: !ref <epoch_counter>
+        normalizer_input: !ref <mean_var_norm_input>

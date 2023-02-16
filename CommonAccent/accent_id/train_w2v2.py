@@ -22,6 +22,8 @@ Author
 
 logger = logging.getLogger(__name__)
 
+import ipdb
+
 # Brain class for Accent ID training
 class AID(sb.Brain):
     def prepare_features(self, wavs, stage):
@@ -35,6 +37,9 @@ class AID(sb.Brain):
             The current stage of training.
         """
         wavs, wav_lens = wavs
+        
+        # Feature extraction and normalization
+        wavs = self.modules.mean_var_norm_input(wavs, wav_lens)
 
         # Add augmentation if specified. In this version of augmentation, we
         # concatenate the original and the augment batches in a single bigger
@@ -89,10 +94,11 @@ class AID(sb.Brain):
         else:
             outputs = self.hparams.avg_pool(feats)
 
+        # ipdb.set_trace()
+        # preparing outputs
         outputs = outputs.view(outputs.shape[0], -1)
-
         outputs = self.modules.output_mlp(outputs)
-        outputs = self.hparams.log_softmax(outputs)
+        # outputs = self.hparams.log_softmax(outputs)
 
         return outputs, lens
 
@@ -120,7 +126,7 @@ class AID(sb.Brain):
         targets = batch.accent_encoded.data
 
         # to meet the input form of nll loss
-        targets = targets.squeeze(1)
+        # targets = targets.squeeze(1)
 
         # Concatenate labels (due to data augmentation)
         if stage == sb.Stage.TRAIN and hparams["apply_augmentation"]:
@@ -129,29 +135,86 @@ class AID(sb.Brain):
 
             if hasattr(self.hparams.lr_annealing, "on_batch_end"):
                 self.hparams.lr_annealing.on_batch_end(self.optimizer)
+        # ipdb.set_trace()
 
         # get the final loss
-        loss = self.hparams.compute_cost(predictions, targets)
+        loss = self.hparams.compute_cost(predictions, targets, lens)
 
         # append the metrics for evaluation
         if stage != sb.Stage.TRAIN:
+            # ipdb.set_trace()
             self.error_metrics.append(batch.id, predictions, targets)
+            
+            # compute the accuracy of the one-step-forward prediction
+            self.acc_metric.append(predictions, targets, lens)
+
 
         return loss
 
+    # def fit_batch(self, batch):
+    #     """Trains the parameters given a single batch in input"""
+
+    #     predictions = self.compute_forward(batch, sb.Stage.TRAIN)
+    #     loss = self.compute_objectives(predictions, batch, sb.Stage.TRAIN)
+    #     loss.backward()
+    #     if self.check_gradients(loss):
+    #         self.wav2vec2_optimizer.step()
+    #         self.optimizer.step()
+    #     self.wav2vec2_optimizer.zero_grad()
+    #     self.optimizer.zero_grad()
+
+    #     return loss.detach()
+
+
     def fit_batch(self, batch):
-        """Trains the parameters given a single batch in input"""
 
-        predictions = self.compute_forward(batch, sb.Stage.TRAIN)
-        loss = self.compute_objectives(predictions, batch, sb.Stage.TRAIN)
-        loss.backward()
-        if self.check_gradients(loss):
-            self.wav2vec2_optimizer.step()
-            self.optimizer.step()
-        self.wav2vec2_optimizer.zero_grad()
-        self.optimizer.zero_grad()
+        should_step = self.step % self.grad_accumulation_factor == 0
+        # Managing automatic mixed precision
+        if self.auto_mix_prec:
+            with torch.cuda.amp.autocast():
+                outputs = self.compute_forward(batch, sb.Stage.TRAIN)
+                loss = self.compute_objectives(outputs, batch, sb.Stage.TRAIN)
+            with self.no_sync(not should_step):
+                self.scaler.scale(
+                    loss / self.grad_accumulation_factor
+                ).backward()
+            if should_step:
+                self.scaler.unscale_(self.optimizer)
+                self.scaler.unscale_(self.wav2vec2_optimizer)
+                if self.check_gradients(loss):
+                    self.scaler.step(self.optimizer)
+                    self.scaler.step(self.wav2vec2_optimizer)
 
+                self.scaler.update()
+                self.zero_grad()
+                self.hparams.noam_annealing(self.optimizer)
+                self.hparams.noam_annealing_w2v2(self.wav2vec2_optimizer)
+                self.optimizer_step += 1
+        else:
+            outputs = self.compute_forward(batch, sb.Stage.TRAIN)
+            loss = self.compute_objectives(outputs, batch, sb.Stage.TRAIN)
+            with self.no_sync(not should_step):
+                (loss / self.grad_accumulation_factor).backward()
+            if should_step:
+                if self.check_gradients(loss):
+                    self.optimizer.step()
+                    self.wav2vec2_optimizer.step()
+                self.optimizer.zero_grad()
+                self.wav2vec2_optimizer.zero_grad()
+                self.hparams.noam_annealing(self.optimizer)
+                self.hparams.noam_annealing_w2v2(self.wav2vec2_optimizer)
+                self.optimizer_step += 1
+
+        self.on_fit_batch_end(batch, outputs, loss, should_step)
+        return loss.detach().cpu()
+    
+    def evaluate_batch(self, batch, stage):
+        """Computations needed for validation/test batches"""
+        with torch.no_grad():
+            predictions = self.compute_forward(batch, stage=stage)
+            loss = self.compute_objectives(predictions, batch, stage=stage)
         return loss.detach()
+
 
     def on_stage_start(self, stage, epoch=None):
         """Gets called at the beginning of each epoch.
@@ -173,6 +236,7 @@ class AID(sb.Brain):
         # Set up evaluation-only statistics trackers
         if stage != sb.Stage.TRAIN:
             self.error_metrics = self.hparams.error_stats()
+            self.acc_metric = self.hparams.acc_computer()
 
     def on_stage_end(self, stage, stage_loss, epoch=None):
         """Gets called at the end of an epoch.
@@ -187,51 +251,80 @@ class AID(sb.Brain):
             The currently-starting epoch. This is passed
             `None` during the test stage.
         """
-
+        
+        stage_stats = {"loss": stage_loss}
         # Store the train loss until the validation stage.
         if stage == sb.Stage.TRAIN:
-            self.train_loss = stage_loss
-
+            self.train_stats = stage_stats
+            # self.train_loss = stage_loss
         # Summarize the statistics from the stage for record-keeping.
         else:
-            stats = {
-                "loss": stage_loss,
-                "error_rate": self.error_metrics.summarize("average"),
+            stage_stats["ACC"] = self.acc_metric.summarize()
+            stage_stats["error_rate"] = self.error_metrics.summarize("average")
+
+            # stats = {
+            #     "loss": stage_loss,
+            #     "error_rate": self.error_metrics.summarize("average"),
+            # }
+
+        # log stats and save checkpoint at end-of-epoch
+        if stage == sb.Stage.VALID and sb.utils.distributed.if_main_process():
+
+            # old_lr, new_lr = self.hparams.lr_annealing(stats["error_rate"])
+            # sb.nnet.schedulers.update_learning_rate(self.optimizer, new_lr)
+            # (
+            #     old_lr_wav2vec2,
+            #     new_lr_wav2vec2,
+            # ) = self.hparams.lr_annealing_wav2vec2(stats["error_rate"])
+            # sb.nnet.schedulers.update_learning_rate(
+            #     self.wav2vec2_optimizer, new_lr_wav2vec2
+            # )
+
+            lr = self.hparams.noam_annealing.current_lr
+            steps = self.optimizer_step
+            optimizer = self.optimizer.__class__.__name__
+
+            epoch_stats = {
+                "epoch": epoch,
+                "lr": lr,
+                "steps": steps,
+                "optimizer": optimizer,
             }
-
-
-        # At the end of validation...
-        if stage == sb.Stage.VALID:
-
-            old_lr, new_lr = self.hparams.lr_annealing(stats["error_rate"])
-            sb.nnet.schedulers.update_learning_rate(self.optimizer, new_lr)
-
-            (
-                old_lr_wav2vec2,
-                new_lr_wav2vec2,
-            ) = self.hparams.lr_annealing_wav2vec2(stats["error_rate"])
-            sb.nnet.schedulers.update_learning_rate(
-                self.wav2vec2_optimizer, new_lr_wav2vec2
-            )
-
-            # The train_logger writes a summary to stdout and to the logfile.
             self.hparams.train_logger.log_stats(
-                {"Epoch": epoch, "lr": old_lr, "wave2vec_lr": old_lr_wav2vec2},
-                train_stats={"loss": self.train_loss},
-                valid_stats=stats,
+                stats_meta=epoch_stats,
+                train_stats=self.train_stats,
+                valid_stats=stage_stats,
             )
-
-            # Save the current checkpoint and delete previous checkpoints,
             self.checkpointer.save_and_keep_only(
-                meta=stats, min_keys=["error_rate"]
+                meta={"ACC": stage_stats["ACC"], "epoch": epoch},
+                max_keys=["ACC"],
+                num_to_keep=1,
             )
 
         # We also write statistics about test data to stdout and to logfile.
         if stage == sb.Stage.TEST:
+            # self.hparams.train_logger.log_stats(
+            #     {"Epoch loaded": self.hparams.epoch_counter.current},
+            #     test_stats=stats,
+            # )
             self.hparams.train_logger.log_stats(
-                {"Epoch loaded": self.hparams.epoch_counter.current},
-                test_stats=stats,
+                stats_meta={"Epoch loaded": self.hparams.epoch_counter.current},
+                test_stats=stage_stats,
             )
+
+    def on_evaluate_start(self, max_key=None, min_key=None):
+        """perform checkpoint averge if needed"""
+        super().on_evaluate_start()
+
+        ckpts = self.checkpointer.find_checkpoints(
+            max_key=max_key, min_key=min_key
+        )
+        ckpt = sb.utils.checkpoints.average_checkpoints(
+            ckpts, recoverable_name="model", device=self.device
+        )
+
+        self.hparams.model.load_state_dict(ckpt, strict=True)
+        self.hparams.model.eval()
 
     def init_optimizers(self):
         "Initializes the wav2vec2 optimizer and model optimizer"
@@ -332,10 +425,6 @@ def dataio_prep(hparams):
     def audio_pipeline(wav):
         """Load the signal, and pass it and its length to the corruption class.
         This is done on the CPU in the `collate_fn`."""
-        # sig, _ = torchaudio.load(wav)
-        # sig = sig.transpose(0, 1).squeeze(1)
-        # sig, _ = librosa.load(wav, sr=hparams["sample_rate"])
-        # sig = torch.tensor(sig)
         info = torchaudio.info(wav)
         sig = sb.dataio.dataio.read_audio(wav)
         sig = torchaudio.transforms.Resample(
