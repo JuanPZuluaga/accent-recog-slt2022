@@ -298,7 +298,7 @@ class AID(sb.Brain):
             self.checkpointer.save_and_keep_only(
                 meta={"ACC": stage_stats["ACC"], "epoch": epoch},
                 max_keys=["ACC"],
-                num_to_keep=1,
+                num_to_keep=2,
             )
 
         # We also write statistics about test data to stdout and to logfile.

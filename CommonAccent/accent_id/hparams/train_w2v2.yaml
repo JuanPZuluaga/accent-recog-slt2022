@@ -46,7 +46,7 @@ batch_size: 32
 freeze_wav2vec2: False
 # set to true to freeze the CONV part of the wav2vec2 model
 # We see an improvement of 2% with freezing CNNs
-freeze_wav2vec2_conv: False
+freeze_wav2vec2_conv: True
 
 # Number of accents
 n_accents: 21
@@ -106,7 +106,6 @@ mean_var_norm_input: !new:speechbrain.processing.features.InputNormalization
 # Model parameters
 activation: !name:torch.nn.GELU
 dnn_layers: 2
-dnn_neurons: 1024
 
 # front end Wav2vec2 - main model
 wav2vec2: !new:speechbrain.lobes.models.huggingface_wav2vec.HuggingFaceWav2Vec2
@@ -124,9 +123,12 @@ avg_pool_class: statpool
 #     n_neurons: !ref <n_accents>
 #     bias: False
 
-# classifier: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
-#     input_size: !ref <encoder_dim>
-#     out_neurons: !ref <n_accents>
+# output_mlp: !new:speechbrain.lobes.models.VanillaNN.VanillaNN
+#    input_shape: [null, null, !ref <encoder_dim>]
+#    activation: !ref <activation>
+#    dnn_blocks: !ref <dnn_layers>
+#    dnn_neurons: !ref <n_accents>
+
 output_mlp: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
     input_size: !ref <encoder_dim>
     out_neurons: !ref <n_accents>
@@ -166,34 +168,24 @@ lr: 0.0001
 lr_wav2vec2: 0.0001
 
 # Optimizers class 
-opt_class: !name:torch.optim.AdamW
+opt_class: !name:torch.optim.Adam
     lr: !ref <lr>
     betas: (0.9, 0.98)
     eps: 0.000000001
 
-wav2vec2_opt_class: !name:torch.optim.AdamW
+wav2vec2_opt_class: !name:torch.optim.Adam
     lr: !ref <lr_wav2vec2>
     betas: (0.9, 0.98)
     eps: 0.000000001
 
-# LR annealing objects
-# lr_annealing: !new:speechbrain.nnet.schedulers.NewBobScheduler
-#     initial_value: !ref <lr>
-#     improvement_threshold: 0.0025
-#     annealing_factor: 0.9
-#     patient: 0
-# lr_annealing_wav2vec2: !new:speechbrain.nnet.schedulers.NewBobScheduler
-#     initial_value: !ref <lr_wav2vec2>
-#     improvement_threshold: 0.0025
-#     annealing_factor: 0.9
-
+# LR annealing objects (Noam + Warmup)
 noam_annealing: !new:speechbrain.nnet.schedulers.NoamScheduler
     lr_initial: !ref <lr>
-    n_warmup_steps: 25000
+    n_warmup_steps: 1000
 
 noam_annealing_w2v2: !new:speechbrain.nnet.schedulers.NoamScheduler
     lr_initial: !ref <lr_wav2vec2>
-    n_warmup_steps: 25000
+    n_warmup_steps: 5000
 
 
 # This object is used for saving the state of training both so that it

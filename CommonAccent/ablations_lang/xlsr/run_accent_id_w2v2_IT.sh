@@ -24,8 +24,7 @@ n_accents=5
 
 # training vars
 # model from HF hub, it could be another one, e.g., facebook/wav2vec2-base
-wav2vec2_hub="facebook/wav2vec2-large-xlsr-53"; hparams="train_w2v2_xlsr.yaml"
-wav2vec2_hub="facebook/wav2vec2-base"; hparams="train_w2v2.yaml"
+wav2vec2_hub="facebook/wav2vec2-large-xlsr-53"; hparams="train_w2v2.yaml"
 
 seed="1986"
 apply_augmentation="False"
@@ -40,11 +39,11 @@ for lr_rate in "${lr_rates[@]}"; do
     if [ "$apply_augmentation" == "True" ]; then
         output_folder="$output_dir/$(basename $wav2vec2_hub)-augmented/$lr_rate/$seed"
         rir_folder="data/rir_folder/"
-        max_batch_len=250
+        max_batch_len=50
     else
         output_folder="$output_dir/$(basename $wav2vec2_hub)/$lr_rate/$seed"
         rir_folder=""
-        max_batch_len=400
+        max_batch_len=100
     fi
 
     # configure a GPU to use if we a defined 'CMD'
@@ -67,12 +66,13 @@ for lr_rate in "${lr_rates[@]}"; do
         --skip_prep="True" \
         --rir_folder="$rir_folder" \
         --n_accents="$n_accents" \
-        --number_of_epochs=100 \
+        --number_of_epochs=50 \
         --csv_prepared_folder=$csv_prepared_folder \
         --apply_augmentation="$apply_augmentation" \
         --max_batch_len="$max_batch_len" \
         --output_folder="$output_folder" \
-        --wav2vec2_hub="$wav2vec2_hub"
+        --wav2vec2_hub="$wav2vec2_hub" \
+        --encoder_dim=1024
 
 ) || touch ${output_folder}/log/.error &
 done

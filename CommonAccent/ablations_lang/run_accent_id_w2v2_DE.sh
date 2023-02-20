@@ -32,7 +32,6 @@ apply_augmentation="False"
 
 # ablation, different learning rates
 lr_rates="0.001 0.0001 0.0005 0.00001"
-lr_rates="0.001 0.0001 0.00001"
 lr_rates=($lr_rates)
 
 for lr_rate in "${lr_rates[@]}"; do
@@ -68,7 +67,7 @@ for lr_rate in "${lr_rates[@]}"; do
         --skip_prep="True" \
         --rir_folder="$rir_folder" \
         --n_accents="$n_accents" \
-        --number_of_epochs=50 \
+        --number_of_epochs=100 \
         --csv_prepared_folder=$csv_prepared_folder \
         --apply_augmentation="$apply_augmentation" \
         --max_batch_len="$max_batch_len" \
