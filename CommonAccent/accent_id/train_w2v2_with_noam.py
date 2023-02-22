@@ -150,23 +150,49 @@ class AID(sb.Brain):
             # self.acc_metric.append(predictions, targets, lens)
             self.acc_metric.append(predictions, targets.view(1, -1), lens)
         return loss
-    
+
     def fit_batch(self, batch):
-        """Trains the parameters given a single batch in input"""
+
         should_step = self.step % self.grad_accumulation_factor == 0
+        # Managing automatic mixed precision
+        if self.auto_mix_prec:
+            with torch.cuda.amp.autocast():
+                outputs = self.compute_forward(batch, sb.Stage.TRAIN)
+                loss = self.compute_objectives(outputs, batch, sb.Stage.TRAIN)
+            with self.no_sync(not should_step):
+                self.scaler.scale(
+                    loss / self.grad_accumulation_factor
+                ).backward()
+            if should_step:
+                self.scaler.unscale_(self.optimizer)
+                self.scaler.unscale_(self.wav2vec2_optimizer)
+                if self.check_gradients(loss):
+                    self.scaler.step(self.optimizer)
+                    self.scaler.step(self.wav2vec2_optimizer)
 
-        predictions = self.compute_forward(batch, sb.Stage.TRAIN)
-        loss = self.compute_objectives(predictions, batch, sb.Stage.TRAIN)
-        loss.backward()
-        if self.check_gradients(loss):
-            self.wav2vec2_optimizer.step()
-            self.optimizer.step()
-        self.wav2vec2_optimizer.zero_grad()
-        self.optimizer.zero_grad()
+                self.scaler.update()
+                self.zero_grad()
+                self.hparams.noam_annealing(self.optimizer)
+                self.hparams.noam_annealing_w2v2(self.wav2vec2_optimizer)
+                self.optimizer_step += 1
+        else:
+            outputs = self.compute_forward(batch, sb.Stage.TRAIN)
+            loss = self.compute_objectives(outputs, batch, sb.Stage.TRAIN)
+            with self.no_sync(not should_step):
+                (loss / self.grad_accumulation_factor).backward()
+            if should_step:
+                if self.check_gradients(loss):
+                    self.optimizer.step()
+                    self.wav2vec2_optimizer.step()
+                self.optimizer.zero_grad()
+                self.wav2vec2_optimizer.zero_grad()
+                ipdb.set_trace()
+                self.hparams.noam_annealing(self.optimizer)
+                self.hparams.noam_annealing_w2v2(self.wav2vec2_optimizer)
+                self.optimizer_step += 1
 
-        self.on_fit_batch_end(batch, predictions, loss, should_step)
+        self.on_fit_batch_end(batch, outputs, loss, should_step)
         return loss.detach().cpu()
-
     
     def evaluate_batch(self, batch, stage):
         """Computations needed for validation/test batches"""
@@ -216,7 +242,7 @@ class AID(sb.Brain):
         # Store the train loss until the validation stage.
         if stage == sb.Stage.TRAIN:
             self.train_stats = stage_stats
-            self.train_loss = stage_loss
+            # self.train_loss = stage_loss
         # Summarize the statistics from the stage for record-keeping.
         else:
             stage_stats["ACC"] = self.acc_metric.summarize()
@@ -225,20 +251,21 @@ class AID(sb.Brain):
         # log stats and save checkpoint at end-of-epoch
         if stage == sb.Stage.VALID and sb.utils.distributed.if_main_process():
 
-            old_lr, new_lr = self.hparams.lr_annealing(stage_stats["error_rate"])
-            sb.nnet.schedulers.update_learning_rate(self.optimizer, new_lr)
+            lr = self.hparams.noam_annealing.current_lr
+            lr_w2v2 = self.hparams.noam_annealing_w2v2.current_lr
+            steps = self.optimizer_step
+            optimizer = self.optimizer.__class__.__name__
 
-            (
-                old_lr_wav2vec2,
-                new_lr_wav2vec2,
-            ) = self.hparams.lr_annealing_wav2vec2(stage_stats["error_rate"])
-            sb.nnet.schedulers.update_learning_rate(
-                self.wav2vec2_optimizer, new_lr_wav2vec2
-            )
-            # The train_logger writes a summary to stdout and to the logfile.
+            epoch_stats = {
+                "epoch": epoch,
+                "lr": lr,
+                "lr_w2v2": lr_w2v2,
+                "steps": steps,
+                "optimizer": optimizer,
+            }
             self.hparams.train_logger.log_stats(
-                {"Epoch": epoch, "lr": old_lr, "wave2vec_lr": old_lr_wav2vec2},
-                train_stats={"loss": self.train_loss},
+                stats_meta=epoch_stats,
+                train_stats=self.train_stats,
                 valid_stats=stage_stats,
             )
             self.checkpointer.save_and_keep_only(
@@ -249,6 +276,10 @@ class AID(sb.Brain):
 
         # We also write statistics about test data to stdout and to logfile.
         if stage == sb.Stage.TEST:
+            # self.hparams.train_logger.log_stats(
+            #     {"Epoch loaded": self.hparams.epoch_counter.current},
+            #     test_stats=stats,
+            # )
             self.hparams.train_logger.log_stats(
                 stats_meta={"Epoch loaded": self.hparams.epoch_counter.current},
                 test_stats=stage_stats,

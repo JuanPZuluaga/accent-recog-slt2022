@@ -87,10 +87,10 @@ env_corrupt: !new:speechbrain.lobes.augment.EnvCorrupt
     openrir_folder: !ref <rir_folder>
     openrir_max_noise_len: 3.0  # seconds
     babble_prob: 0.0
-    reverb_prob: 0.5
-    noise_prob: 0.5
-    noise_snr_low: 10
-    noise_snr_high: 20
+    reverb_prob: 1.0
+    noise_prob: 1.0
+    noise_snr_low: 0
+    noise_snr_high: 15
     rir_scale_factor: 1.0
 
 # A small speed change help to improve the performance of speaker-id as well.
@@ -118,20 +118,20 @@ wav2vec2: !new:speechbrain.lobes.models.huggingface_wav2vec.HuggingFaceWav2Vec2
 # possible classes are statpool, adaptivepool, avgpool
 avg_pool_class: statpool
 
-# output_mlp: !new:speechbrain.nnet.linear.Linear
-#     input_size: !ref <encoder_dim>
-#     n_neurons: !ref <n_accents>
-#     bias: False
-
-# output_mlp: !new:speechbrain.lobes.models.VanillaNN.VanillaNN
-#    input_shape: [null, null, !ref <encoder_dim>]
-#    activation: !ref <activation>
-#    dnn_blocks: !ref <dnn_layers>
-#    dnn_neurons: !ref <n_accents>
-
-output_mlp: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
+output_mlp: !new:speechbrain.nnet.linear.Linear
     input_size: !ref <encoder_dim>
-    out_neurons: !ref <n_accents>
+    n_neurons: !ref <n_accents>
+    bias: False
+
+preout_mlp: !new:speechbrain.lobes.models.VanillaNN.VanillaNN
+   input_shape: [null, null, !ref <encoder_dim>]
+   activation: !ref <activation>
+   dnn_blocks: !ref <dnn_layers>
+   dnn_neurons: !ref <encoder_dim>
+
+# output_mlp: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
+#     input_size: !ref <encoder_dim>
+#     out_neurons: !ref <n_accents>
 
 # The first object passed to the Brain class is this "Epoch Counter"
 # which is saved by the Checkpointer so that training can be resumed
@@ -146,19 +146,21 @@ modules:
     augmentation: !ref <augmentation>
     wav2vec2: !ref <wav2vec2>
     output_mlp: !ref <output_mlp>
+    preout_mlp: !ref <preout_mlp>
     mean_var_norm_input: !ref <mean_var_norm_input>        
 
 model: !new:torch.nn.ModuleList
-   - [!ref <output_mlp>]
+   - [!ref <preout_mlp>, !ref <output_mlp>]
 
 # Additive Angular Margin
-compute_cost: !new:speechbrain.nnet.losses.LogSoftmaxWrapper
-    loss_fn: !new:speechbrain.nnet.losses.AdditiveAngularMargin
-        margin: 0.2
-        scale: 30
+# compute_cost: !new:speechbrain.nnet.losses.LogSoftmaxWrapper
+#     loss_fn: !new:speechbrain.nnet.losses.AdditiveAngularMargin
+#         margin: 0.2
+#         scale: 30
 
 # standard NLL loss
-# compute_cost: !name:speechbrain.nnet.losses.nll_loss
+compute_cost: !name:speechbrain.nnet.losses.nll_loss
+    # label_smoothing: 0.05
 
 log_softmax: !new:speechbrain.nnet.activations.Softmax
     apply_log: True
@@ -179,14 +181,24 @@ wav2vec2_opt_class: !name:torch.optim.Adam
     eps: 0.000000001
 
 # LR annealing objects (Noam + Warmup)
-noam_annealing: !new:speechbrain.nnet.schedulers.NoamScheduler
-    lr_initial: !ref <lr>
-    n_warmup_steps: 1000
+# noam_annealing: !new:speechbrain.nnet.schedulers.NoamScheduler
+#     lr_initial: !ref <lr>
+#     n_warmup_steps: 1000
+# noam_annealing_w2v2: !new:speechbrain.nnet.schedulers.NoamScheduler
+#     lr_initial: !ref <lr_wav2vec2>
+#     n_warmup_steps: 1000
 
-noam_annealing_w2v2: !new:speechbrain.nnet.schedulers.NoamScheduler
-    lr_initial: !ref <lr_wav2vec2>
-    n_warmup_steps: 5000
+# LR annealing objects
+lr_annealing: !new:speechbrain.nnet.schedulers.NewBobScheduler
+  initial_value: 0.0001
+  improvement_threshold: 0.0025
+  annealing_factor: 0.9
+  patient: 0
 
+lr_annealing_wav2vec2: !new:speechbrain.nnet.schedulers.NewBobScheduler
+  initial_value: !ref <lr_wav2vec2>
+  improvement_threshold: 0.0025
+  annealing_factor: 0.9
 
 # This object is used for saving the state of training both so that it
 # can be resumed if it gets interrupted, and also so that the best checkpoint
@@ -196,7 +208,9 @@ checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
     recoverables:
         model: !ref <model>
         wav2vec2: !ref <wav2vec2>
-        noam_annealing: !ref <noam_annealing>
-        noam_annealing_w2v2: !ref <noam_annealing_w2v2>
+        lr_annealing: !ref <lr_annealing>
+        lr_annealing_wav2vec2: !ref <lr_annealing_wav2vec2>
         counter: !ref <epoch_counter>
         normalizer_input: !ref <mean_var_norm_input>
+        # noam_annealing: !ref <noam_annealing>
+        # noam_annealing_w2v2: !ref <noam_annealing_w2v2>

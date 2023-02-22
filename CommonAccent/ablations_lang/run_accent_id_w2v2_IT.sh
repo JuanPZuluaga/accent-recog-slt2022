@@ -24,7 +24,6 @@ n_accents=5
 
 # training vars
 # model from HF hub, it could be another one, e.g., facebook/wav2vec2-base
-wav2vec2_hub="facebook/wav2vec2-large-xlsr-53"; hparams="train_w2v2_xlsr.yaml"
 wav2vec2_hub="facebook/wav2vec2-base"; hparams="train_w2v2.yaml"
 
 seed="1986"

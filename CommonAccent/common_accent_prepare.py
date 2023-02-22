@@ -234,6 +234,7 @@ def create_sets(data_folder, extension, language="en"):
     
     # get the max_samples_per_accent from the list:
     max_samples_per_accent = ACCENTS[0]
+    max_samples_per_accent = 2e3
     
     # accent counter to balance the datasets:
     accent_counter = { acc_id: 0 for acc_id in ACCENTS}

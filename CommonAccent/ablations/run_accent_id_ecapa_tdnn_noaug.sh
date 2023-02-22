@@ -22,6 +22,7 @@ ecapa_tdnn_hub="speechbrain/spkrec-ecapa-voxceleb/embedding_model.ckpt"
 seed="1986"
 apply_augmentation="False"
 max_batch_len=400
+n_accents=14
 
 # data folder:
 csv_prepared_folder="data/en"
@@ -55,7 +56,8 @@ $cmd python accent_id/train.py accent_id/hparams/train_ecapa_tdnn.yaml \
     --apply_augmentation="$apply_augmentation" \
     --max_batch_len="$max_batch_len" \
     --output_folder="$output_folder" \
-    --ecapa_tdnn_hub="$ecapa_tdnn_hub" 
+    --ecapa_tdnn_hub="$ecapa_tdnn_hub" \
+    --n_accents=$n_accents
 
 echo "Done training of $ecapa_tdnn_hub in $output_folder"
 exit 0

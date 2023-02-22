@@ -43,7 +43,7 @@ n_mels: 80
 sample_rate: 16000
 number_of_epochs: 50
 batch_size: 32
-n_languages: 21
+n_accents: 21
 emb_dim: 192 # dimensionality of the embeddings
 
 # batch type of sorting
@@ -125,7 +125,7 @@ embedding_model: !new:speechbrain.lobes.models.ECAPA_TDNN.ECAPA_TDNN
 # Classifier based on cosine distance
 classifier: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
     input_size: !ref <emb_dim>
-    out_neurons: !ref <n_languages>
+    out_neurons: !ref <n_accents>
 
 # The first object passed to the Brain class is this "Epoch Counter"
 # which is saved by the Checkpointer so that training can be resumed
