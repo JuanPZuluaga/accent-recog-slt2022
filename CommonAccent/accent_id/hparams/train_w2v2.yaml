@@ -21,7 +21,9 @@ train_log: !ref <output_folder>/train_log.txt
 device: 'cuda:0'
 skip_prep: True
 # max audio lenth allowed, higher than this is dropped
-avoid_if_longer_than: 10.0
+avoid_if_longer_than: 11.0
+
+grad_accumulation_factor: 1
 
 # URL for the base Fairseq english wav2vec2 model.
 wav2vec2_hub: "facebook/wav2vec2-base" #dimension of this model is 768
@@ -35,6 +37,7 @@ train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
 error_stats: !name:speechbrain.utils.metric_stats.MetricStats
     metric: !name:speechbrain.nnet.losses.classification_error
         reduction: batch
+
 acc_computer: !name:speechbrain.utils.Accuracy.AccuracyStats
 
 # Training Parameters
@@ -172,13 +175,13 @@ lr_wav2vec2: 0.0001
 # Optimizers class 
 opt_class: !name:torch.optim.Adam
     lr: !ref <lr>
-    betas: (0.9, 0.98)
-    eps: 0.000000001
+    # betas: (0.9, 0.98)
+    # eps: 0.000000001
 
 wav2vec2_opt_class: !name:torch.optim.Adam
     lr: !ref <lr_wav2vec2>
-    betas: (0.9, 0.98)
-    eps: 0.000000001
+    # betas: (0.9, 0.98)
+    # eps: 0.000000001
 
 # LR annealing objects (Noam + Warmup)
 # noam_annealing: !new:speechbrain.nnet.schedulers.NoamScheduler

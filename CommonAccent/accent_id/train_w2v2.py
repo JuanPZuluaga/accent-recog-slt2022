@@ -38,9 +38,6 @@ class AID(sb.Brain):
         """
         wavs, wav_lens = wavs
         
-        # Feature extraction and normalization
-        # wavs = self.modules.mean_var_norm_input(wavs, wav_lens)
-
         # Add augmentation if specified. In this version of augmentation, we
         # concatenate the original and the augment batches in a single bigger
         # batch. This is more memory-demanding, but helps to improve the
@@ -53,6 +50,9 @@ class AID(sb.Brain):
         
             if hasattr(self.hparams, "augmentation"):
                 wavs = self.hparams.augmentation(wavs, wav_lens)
+        
+        # Feature extraction and normalization
+        wavs = self.modules.mean_var_norm_input(wavs, wav_lens)       
 
         # forward pass HF (possible: pre-trained) model
         # feats = self.modules.wav2vec2(wavs, wav_lens=wav_lens)
@@ -136,7 +136,6 @@ class AID(sb.Brain):
 
             # if hasattr(self.hparams.lr_annealing, "on_batch_end"):
             #     self.hparams.lr_annealing.on_batch_end(self.optimizer)
-        # ipdb.set_trace()
 
         # get the final loss
         loss = self.hparams.compute_cost(predictions, targets)
@@ -145,10 +144,13 @@ class AID(sb.Brain):
         if stage != sb.Stage.TRAIN:
             # ipdb.set_trace()
             self.error_metrics.append(batch.id, predictions, targets)
+            self.error_metrics2.append(batch.id, predictions.argmax(-1), targets)
             
             # compute the accuracy of the one-step-forward prediction
             # self.acc_metric.append(predictions, targets, lens)
             self.acc_metric.append(predictions, targets.view(1, -1), lens)
+            self.acc_metric2.append(predictions.argmax(-1), targets.view(1, -1), lens)
+
         return loss
     
     def fit_batch(self, batch):
@@ -157,12 +159,16 @@ class AID(sb.Brain):
 
         predictions = self.compute_forward(batch, sb.Stage.TRAIN)
         loss = self.compute_objectives(predictions, batch, sb.Stage.TRAIN)
-        loss.backward()
-        if self.check_gradients(loss):
-            self.wav2vec2_optimizer.step()
-            self.optimizer.step()
-        self.wav2vec2_optimizer.zero_grad()
-        self.optimizer.zero_grad()
+
+        with self.no_sync(not should_step):
+            (loss / self.grad_accumulation_factor).backward()
+        if should_step:
+            if self.check_gradients(loss):
+                self.wav2vec2_optimizer.step()
+                self.optimizer.step()
+            self.wav2vec2_optimizer.zero_grad()
+            self.optimizer.zero_grad()
+            self.optimizer_step += 1
 
         self.on_fit_batch_end(batch, predictions, loss, should_step)
         return loss.detach().cpu()
@@ -197,6 +203,9 @@ class AID(sb.Brain):
         if stage != sb.Stage.TRAIN:
             self.error_metrics = self.hparams.error_stats()
             self.acc_metric = self.hparams.acc_computer()
+            self.error_metrics2 = self.hparams.error_stats()
+            self.acc_metric2 = self.hparams.acc_computer()
+
 
     def on_stage_end(self, stage, stage_loss, epoch=None):
         """Gets called at the end of an epoch.
@@ -215,7 +224,7 @@ class AID(sb.Brain):
         stage_stats = {"loss": stage_loss}
         # Store the train loss until the validation stage.
         if stage == sb.Stage.TRAIN:
-            self.train_stats = stage_stats
+            # self.train_stats = stage_stats
             self.train_loss = stage_loss
         # Summarize the statistics from the stage for record-keeping.
         else:
@@ -225,6 +234,7 @@ class AID(sb.Brain):
         # log stats and save checkpoint at end-of-epoch
         if stage == sb.Stage.VALID and sb.utils.distributed.if_main_process():
 
+            # ipdb.set_trace()
             old_lr, new_lr = self.hparams.lr_annealing(stage_stats["error_rate"])
             sb.nnet.schedulers.update_learning_rate(self.optimizer, new_lr)
 
@@ -235,16 +245,26 @@ class AID(sb.Brain):
             sb.nnet.schedulers.update_learning_rate(
                 self.wav2vec2_optimizer, new_lr_wav2vec2
             )
+
+            steps = self.optimizer_step
+
             # The train_logger writes a summary to stdout and to the logfile.
+            epoch_stats = {
+                "epoch": epoch,
+                "lr": old_lr,
+                "wave2vec_lr": old_lr_wav2vec2,
+                "steps": steps,
+            }
+
             self.hparams.train_logger.log_stats(
-                {"Epoch": epoch, "lr": old_lr, "wave2vec_lr": old_lr_wav2vec2},
+                stats_meta=epoch_stats,
                 train_stats={"loss": self.train_loss},
                 valid_stats=stage_stats,
             )
             self.checkpointer.save_and_keep_only(
                 meta={"ACC": stage_stats["ACC"], "epoch": epoch},
                 max_keys=["ACC"],
-                num_to_keep=2,
+                num_to_keep=1,
             )
 
         # We also write statistics about test data to stdout and to logfile.
@@ -294,9 +314,11 @@ def dataio_prep(hparams):
     # 1. Define train/valid/test datasets
     data_folder = hparams["csv_prepared_folder"]
     train_csv = os.path.join(data_folder, "train" + ".csv")
-    # train_csv = os.path.join(data_folder, "dev" + ".csv")
     valid_csv = os.path.join(data_folder, "dev" + ".csv")
     test_csv = os.path.join(data_folder, "test" + ".csv")
+
+    # train_csv = os.path.join(data_folder, "dev" + ".csv")
+    # valid_csv = os.path.join(data_folder, "test" + ".csv")
 
     train_data = sb.dataio.dataset.DynamicItemDataset.from_csv(
         csv_path=train_csv, replacements={"data_root": data_folder},
@@ -354,11 +376,13 @@ def dataio_prep(hparams):
     def audio_pipeline(wav):
         """Load the signal, and pass it and its length to the corruption class.
         This is done on the CPU in the `collate_fn`."""
-        info = torchaudio.info(wav)
-        sig = sb.dataio.dataio.read_audio(wav)
-        sig = torchaudio.transforms.Resample(
-            info.sample_rate, hparams["sample_rate"],
-        )(sig)
+        # info = torchaudio.info(wav)
+        # sig = sb.dataio.dataio.read_audio(wav)
+        # sig = torchaudio.transforms.Resample(
+        #     info.sample_rate, hparams["sample_rate"],
+        # )(sig)
+        sig, _ = librosa.load(wav, sr=hparams["sample_rate"])
+        sig = torch.tensor(sig)
         return sig
 
     sb.dataio.dataset.add_dynamic_item(datasets, audio_pipeline)

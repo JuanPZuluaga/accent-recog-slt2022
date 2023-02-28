@@ -15,7 +15,8 @@
 set -euo pipefail
 
 # static vars
-cmd='/remote/idiap.svm/temp.speech01/jzuluaga/kaldi-jul-2020/egs/wsj/s5/utils/parallel/queue.pl -l gpu -P minerva -l h='vgn[ij]*' -V'
+# cmd='/remote/idiap.svm/temp.speech01/jzuluaga/kaldi-jul-2020/egs/wsj/s5/utils/parallel/queue.pl -l gpu -P minerva -l h='vgn[ij]*' -V'
+cmd='/remote/idiap.svm/temp.speech01/jzuluaga/kaldi-jul-2020/egs/wsj/s5/utils/parallel/queue.pl -l gpu -P minerva -l h='vgne*' -V'
 
 # data folder:
 csv_prepared_folder="data/en"
@@ -29,10 +30,11 @@ wav2vec2_hub="facebook/wav2vec2-base"; hparams="train_w2v2.yaml"
 
 seed="1986"
 apply_augmentation="True"
+grad_accumulation_factor=6
 
 # ablation, different learning rates
 lr_rates="0.001 0.0001 0.0005 0.00001"
-lr_rates="0.01 0.001 0.0001"
+lr_rates="0.0001 0.00001"
 lr_rates=($lr_rates)
 
 for lr_rate in "${lr_rates[@]}"; do
@@ -69,6 +71,7 @@ for lr_rate in "${lr_rates[@]}"; do
         --rir_folder="$rir_folder" \
         --n_accents="$n_accents" \
         --number_of_epochs=100 \
+        --grad_accumulation_factor=$grad_accumulation_factor \
         --csv_prepared_folder=$csv_prepared_folder \
         --apply_augmentation="$apply_augmentation" \
         --max_batch_len="$max_batch_len" \
