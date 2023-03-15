@@ -6,7 +6,7 @@
 #
 # SPDX-License-Identifier: MIT-License 
 
-# Base script to fine-tunine a XLSR-53 (wav2vec2.0) on Accent Classification for Spanish
+# Base script to fine-tunine a XLSR-53 (wav2vec2.0) on Accent Classification for German
 #######################################
 # COMMAND LINE OPTIONS,
 # high-level variables for training the model. TrainingArguments (HuggingFace)
@@ -19,9 +19,10 @@ cmd='/remote/idiap.svm/temp.speech01/jzuluaga/kaldi-jul-2020/egs/wsj/s5/utils/pa
 cmd='/remote/idiap.svm/temp.speech01/jzuluaga/kaldi-jul-2020/egs/wsj/s5/utils/parallel/queue.pl -l gpu -P minerva -l h='vgn[fghij]*' -V'
 
 # data folder:
-csv_prepared_folder="data/es"
-output_dir="results/W2V2/ES/"
-n_accents=6
+csv_prepared_folder="data/en"
+csv_prepared_folder="data/en_2k"
+output_dir="results/W2V2/EN_small/"
+n_accents=14
 
 # training vars
 # model from HF hub, it could be another one, e.g., facebook/wav2vec2-base
@@ -63,7 +64,6 @@ for lr_rate in "${lr_rates[@]}"; do
     rm -rf ${output_folder}/log/.error
     echo "training model in $output_folder"
 
-
     $cmd python3 accent_id/train_w2v2.py accent_id/hparams/$hparams \
         --seed="$seed" \
         --lr_wav2vec2="$lr_rate" \
@@ -78,7 +78,6 @@ for lr_rate in "${lr_rates[@]}"; do
         --output_folder="$output_folder" \
         --wav2vec2_hub="$wav2vec2_hub" \
         --encoder_dim="$encoder_dim"
-
 
 ) || touch ${output_folder}/log/.error &
 done

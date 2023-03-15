@@ -49,7 +49,7 @@ batch_size: 32
 freeze_wav2vec2: False
 # set to true to freeze the CONV part of the wav2vec2 model
 # We see an improvement of 2% with freezing CNNs
-freeze_wav2vec2_conv: True
+freeze_wav2vec2_conv: False
 
 # Number of accents
 n_accents: 21
@@ -163,22 +163,22 @@ model: !new:torch.nn.ModuleList
 
 # standard NLL loss
 compute_cost: !name:speechbrain.nnet.losses.nll_loss
-    # label_smoothing: 0.05
+    label_smoothing: 0.1
 
 log_softmax: !new:speechbrain.nnet.activations.Softmax
     apply_log: True
 
 # Learning rates for normal optimizer and W2V2 model
-lr: 0.0001
+lr: 0.001
 lr_wav2vec2: 0.0001
 
 # Optimizers class 
-opt_class: !name:torch.optim.Adam
+opt_class: !name:torch.optim.AdamW
     lr: !ref <lr>
     # betas: (0.9, 0.98)
     # eps: 0.000000001
 
-wav2vec2_opt_class: !name:torch.optim.Adam
+wav2vec2_opt_class: !name:torch.optim.AdamW
     lr: !ref <lr_wav2vec2>
     # betas: (0.9, 0.98)
     # eps: 0.000000001
@@ -193,7 +193,7 @@ wav2vec2_opt_class: !name:torch.optim.Adam
 
 # LR annealing objects
 lr_annealing: !new:speechbrain.nnet.schedulers.NewBobScheduler
-  initial_value: 0.0001
+  initial_value: !ref <lr>
   improvement_threshold: 0.0025
   annealing_factor: 0.9
   patient: 0

@@ -16,20 +16,23 @@ set -euo pipefail
 
 # static vars
 cmd='/remote/idiap.svm/temp.speech01/jzuluaga/kaldi-jul-2020/egs/wsj/s5/utils/parallel/queue.pl -l gpu -P minerva -l h='vgn[ij]*' -V'
+cmd='/remote/idiap.svm/temp.speech01/jzuluaga/kaldi-jul-2020/egs/wsj/s5/utils/parallel/queue.pl -l gpu -P minerva -l h='vgn[fghij]*' -V'
 
 # data folder:
 csv_prepared_folder="data/de"
 # csv_prepared_folder="data/de_2k"
 output_dir="results/W2V2/DE/"
-n_accents=5
+n_accents=4
 
 # training vars
 # model from HF hub, it could be another one, e.g., facebook/wav2vec2-base
-wav2vec2_hub="facebook/wav2vec2-base"; hparams="train_w2v2.yaml"
+wav2vec2_hub="facebook/wav2vec2-base"; encoder_dim=768
+# wav2vec2_hub="facebook/wav2vec2-large-xlsr-53"; encoder_dim=1024
+hparams="train_w2v2.yaml"
 
 seed="1986"
 apply_augmentation="True"
-grad_accumulation_factor=6
+grad_accumulation_factor=12
 
 # ablation, different learning rates
 lr_rates="0.001 0.0001 0.0005 0.00001"
@@ -75,7 +78,8 @@ for lr_rate in "${lr_rates[@]}"; do
         --apply_augmentation="$apply_augmentation" \
         --max_batch_len="$max_batch_len" \
         --output_folder="$output_folder" \
-        --wav2vec2_hub="$wav2vec2_hub"
+        --wav2vec2_hub="$wav2vec2_hub" \
+        --encoder_dim="$encoder_dim"
 
 ) || touch ${output_folder}/log/.error &
 done

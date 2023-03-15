@@ -52,7 +52,7 @@ class AID(sb.Brain):
                 wavs = self.hparams.augmentation(wavs, wav_lens)
         
         # Feature extraction and normalization
-        wavs = self.modules.mean_var_norm_input(wavs, wav_lens)       
+        # wavs = self.modules.mean_var_norm_input(wavs, wav_lens)       
 
         # forward pass HF (possible: pre-trained) model
         # feats = self.modules.wav2vec2(wavs, wav_lens=wav_lens)

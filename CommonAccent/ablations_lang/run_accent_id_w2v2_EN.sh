@@ -26,11 +26,13 @@ n_accents=14
 
 # training vars
 # model from HF hub, it could be another one, e.g., facebook/wav2vec2-base
-wav2vec2_hub="facebook/wav2vec2-base"; hparams="train_w2v2.yaml"
+wav2vec2_hub="facebook/wav2vec2-base"; encoder_dim=768
+# wav2vec2_hub="facebook/wav2vec2-large-xlsr-53"; encoder_dim=1024
+hparams="train_w2v2.yaml"
 
 seed="1986"
 apply_augmentation="True"
-grad_accumulation_factor=6
+grad_accumulation_factor=10
 
 # ablation, different learning rates
 lr_rates="0.001 0.0001 0.0005 0.00001"
@@ -43,7 +45,7 @@ for lr_rate in "${lr_rates[@]}"; do
     if [ "$apply_augmentation" == "True" ]; then
         output_folder="$output_dir/$(basename $wav2vec2_hub)-augmented/$lr_rate/$seed"
         rir_folder="data/rir_folder/"
-        max_batch_len=100
+        max_batch_len=50
     else
         output_folder="$output_dir/$(basename $wav2vec2_hub)/$lr_rate/$seed"
         rir_folder=""
@@ -76,7 +78,8 @@ for lr_rate in "${lr_rates[@]}"; do
         --apply_augmentation="$apply_augmentation" \
         --max_batch_len="$max_batch_len" \
         --output_folder="$output_folder" \
-        --wav2vec2_hub="$wav2vec2_hub"
+        --wav2vec2_hub="$wav2vec2_hub" \
+        --encoder_dim="$encoder_dim"
 
 ) || touch ${output_folder}/log/.error &
 done

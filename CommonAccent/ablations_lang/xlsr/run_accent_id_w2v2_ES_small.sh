@@ -19,8 +19,8 @@ cmd='/remote/idiap.svm/temp.speech01/jzuluaga/kaldi-jul-2020/egs/wsj/s5/utils/pa
 cmd='/remote/idiap.svm/temp.speech01/jzuluaga/kaldi-jul-2020/egs/wsj/s5/utils/parallel/queue.pl -l gpu -P minerva -l h='vgn[fghij]*' -V'
 
 # data folder:
-csv_prepared_folder="data/es"
-output_dir="results/W2V2/ES/"
+csv_prepared_folder="data/es_2k"
+output_dir="results/W2V2/ES_small/"
 n_accents=6
 
 # training vars
